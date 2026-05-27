@@ -1,0 +1,32 @@
+{
+  "_comment": "OpenClaw MCP Adapter 插件路径（备选方案）",
+
+  "plugins": {
+    "entries": {
+      "mcp-adapter": {
+        "enabled": true,
+        "config": {
+          "servers": [
+            {
+              "name": "qclaw-appshot",
+              "transport": "stdio",
+              "command": "python",
+              "args": ["-m", "qclaw_appshots"],
+              "env": {
+                "QCLAW_DAEMON_SOCK": "/tmp/qclaw-appshot.sock"
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+
+  "tools": {
+    "sandbox": {
+      "tools": {
+        "allow": ["group:runtime", "group:fs", "mcp-adapter"]
+      }
+    }
+  }
+}

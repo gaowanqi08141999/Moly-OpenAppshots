@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>QClaw Appshot Daemon</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.qclaw.appshot-daemon</string>
+    <key>CFBundleVersion</key>
+    <string>0.1.0</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>QClaw Appshots needs screen capture access to take screenshots of your active window for AI analysis.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>QClaw Appshots needs accessibility access to read window text content for AI context.</string>
+</dict>
+</plist>

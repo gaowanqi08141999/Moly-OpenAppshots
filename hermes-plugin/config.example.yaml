@@ -1,0 +1,24 @@
+# Hermes Agent — MCP 配置示例
+
+# 方式一：MCP stdio（推荐，Hermes 自动管理进程生命周期）
+mcp_servers:
+  - name: qclaw-appshot
+    transport: stdio
+    command: python
+    args: ["-m", "qclaw_appshots"]
+    env:
+      QCLAW_DAEMON_SOCK: "/tmp/qclaw-appshot.sock"
+      QCLAW_SNAPSHOT_DIR: "~/snapshots"
+
+# 方式二：如果 MCP Server 作为独立 HTTP 服务运行
+# mcp_servers:
+#   - name: qclaw-appshot
+#     transport: http
+#     url: "http://localhost:9876/mcp"
+
+# 启用 appshot 工具集
+enabled_toolsets:
+  - appshot
+
+# 如果没有在 mcp_servers 中配置，也可以直接使用 hermes-plugin/tools/appshot.py
+# Hermes 会通过 AST 自动发现并加载。

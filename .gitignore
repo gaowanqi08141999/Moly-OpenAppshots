@@ -1,0 +1,29 @@
+# Swift build artifacts
+.build/
+.build-x86_64*/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.idea/
+.vscode/
+*.xcworkspace/
+*.xcuserdata/
+
+# Spec story
+.specstory/
+.cursorindexingignore
+
+# Python virtual environments
+.venv/
+__pycache__/
+*.pyc
+
+# Capture daemon SQLite databases
+*.db
+*.db-journal
+*.db-wal

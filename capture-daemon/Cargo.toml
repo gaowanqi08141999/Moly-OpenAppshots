@@ -1,0 +1,38 @@
+[package]
+name = "qclaw-appshot-daemon"
+version = "0.1.0"
+edition = "2024"
+description = "macOS native capture daemon for QClaw-APPScreenshots"
+license = "MIT"
+
+[[bin]]
+name = "qclaw-appshotd"
+path = "src/main.rs"
+
+[dependencies]
+# HTTP over Unix Socket
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Storage
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# macOS native APIs
+core-foundation = "0.10"
+core-graphics = "0.24"
+screen-capture-kit = "0.1"     # unofficial binding (TODO: replace with mach2 FFI)
+
+# Hotkey
+cgevent = "0.3"                # CGEvent global hotkey
+
+# Utilities
+uuid = { version = "1", features = ["v4"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = "0.3"
