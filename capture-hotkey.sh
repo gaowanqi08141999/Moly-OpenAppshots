@@ -2,6 +2,7 @@
 # QClaw Appshot — Hotkey Capture Script
 # Captures the CURRENT frontmost window (whatever the user is looking at),
 # even when the shortcut runner briefly steals focus.
+# After capture, the screenshot PNG is auto-copied to the system clipboard.
 
 DAEMON_URL="${QCLAW_DAEMON_URL:-http://127.0.0.1:19876}"
 

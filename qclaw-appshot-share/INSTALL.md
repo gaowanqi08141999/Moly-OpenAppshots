@@ -72,7 +72,8 @@ curl -X POST http://127.0.0.1:19876/capture
 # → {"id":"...", "appName":"...", ...}
 
 # Test hotkey: switch to any app, press ⌃⌥⌘Space
-# → A frosted-glass notification should appear at top-right
+# → A white rounded notification appears at top-right
+# → The screenshot PNG is copied to clipboard (paste with ⌘V)
 ```
 
 ## Step 6: Test in Hermes

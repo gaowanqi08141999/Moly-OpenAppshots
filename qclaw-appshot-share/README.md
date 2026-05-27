@@ -8,6 +8,8 @@ Captures the frontmost macOS window in two layers simultaneously:
 1. **Visual layer** — High-fidelity PNG screenshot (Retina 2x) via ScreenCaptureKit
 2. **Text layer** — Full accessibility text tree via macOS Accessibility API
 
+**Hotkey capture also copies the screenshot PNG to your system clipboard** — press ⌘V in any chat window to paste it instantly.
+
 Everything runs locally — no cloud uploads, no API keys.
 
 ## Quick Start
@@ -41,8 +43,8 @@ cp SKILL.md ~/.hermes/skills/appshot/
 |------|---------|
 | `appshot.py` | Hermes tool registrations (5 tools) |
 | `SKILL.md` | Agent skill instructions |
-| `capture-hotkey.sh` | PID-aware hotkey script |
-| `notify.js` | Apple-style notification overlay (JXA) |
+| `capture-hotkey.sh` | PID-aware hotkey script + auto clipboard copy |
+| `notify.js` | Apple-style notification overlay (JXA, white rounded) |
 | `INSTALL.md` | Detailed installation guide |
 
 ## Token Efficiency

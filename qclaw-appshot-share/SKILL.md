@@ -6,7 +6,7 @@ description: |
   1. Hotkey (recommended) — user presses shortcut on target window, daemon captures, agent queries via list_appshots/get_appshot
   2. Direct call — take_appshot captures current frontmost window
   Use when user says "analyze this", "what's on my screen", "check this error", "look at latest screenshot", etc.
-version: 1.4.0
+version: 1.5.0
 platforms: [macos]
 metadata:
   hermes:
@@ -28,11 +28,14 @@ When you call `take_appshot` through Hermes, Hermes runs inside Terminal, so Ter
 User action (in target window)      Hermes (in conversation)
 ─────────────────────────────      ─────────────────────────
 1. Press ⌃⌥⌘Space on target app    (daemon captures silently)
+   ↳ Screenshot PNG auto-copied to clipboard
 2. Switch back to Hermes
 3. "Analyze latest screenshot"     → list_appshots(limit=1)
                                    → get_appshot(id, include_image=true)
                                    → Returns analysis
 ```
+
+**Tip:** The hotkey also copies the screenshot PNG to your system clipboard. You can paste it (⌘V) directly into any chat window without needing `get_appshot(include_image=true)`.
 
 ## Available Tools
 
