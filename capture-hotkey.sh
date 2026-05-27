@@ -2,15 +2,10 @@
 # QClaw Appshot — Hotkey Capture Script
 # Captures the CURRENT frontmost window (whatever the user is looking at),
 # even when the shortcut runner briefly steals focus.
-#
-# The key trick: we grab the frontmost app's PID BEFORE anything else runs,
-# then tell the daemon to capture THAT app specifically, ignoring whatever
-# happens to be frontmost by the time the HTTP request arrives.
 
 DAEMON_URL="${QCLAW_DAEMON_URL:-http://127.0.0.1:19876}"
 
 # Step 1: Get the REAL frontmost app's PID — BEFORE any focus change
-# System Events query is read-only and won't steal focus
 FRONTMOST_PID=$(osascript -e 'tell application "System Events" to get unix id of first process whose frontmost is true' 2>/dev/null)
 
 if [ -z "$FRONTMOST_PID" ]; then
@@ -31,28 +26,26 @@ APP_NAME=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin
 TITLE=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('windowTitle','')[:60])" 2>/dev/null)
 TEXT_LEN=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('textLength',0))" 2>/dev/null)
 SNAP_ID=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null)
+DIR_PATH=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('dirPath',''))" 2>/dev/null)
 
 if [ -z "$APP_NAME" ] || [ "$APP_NAME" = "?" ]; then
     osascript -e 'display notification "Capture failed — check daemon logs" with title "Appshot Error"' 2>/dev/null
     exit 1
 fi
 
-# Step 4: Show notification overlay
-# Prefer native AppshotNotify binary for Apple-style frosted-glass overlay.
-# Fall back to osascript dialog if binary not found.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NOTIFY_BIN="${SCRIPT_DIR}/capture-daemon/.build/debug/AppshotNotify"
-
-if [ -x "$NOTIFY_BIN" ]; then
-    "$NOTIFY_BIN" "${APP_NAME}" &
-else
-    # Fallback: plain osascript dialog
-    ESC_APP="${APP_NAME//\"/\\\"}"
-    ESC_TITLE="${TITLE//\"/\\\"}"
-    osascript -e "display dialog \"截图已保存 ✅\n\n${ESC_APP}\n${ESC_TITLE}\n文本: ${TEXT_LEN} chars\" with title \"Appshot Captured\" buttons {\"OK\"} default button \"OK\" giving up after 2" 2>/dev/null
+# Step 4: Copy screenshot PNG to clipboard ("screenshot → paste" UX)
+PNG_PATH="${DIR_PATH}/screenshot.png"
+if [ -f "$PNG_PATH" ]; then
+    osascript -e "set the clipboard to (read (POSIX file \"$PNG_PATH\") as «class PNGf»)" 2>/dev/null
 fi
 
-# Step 5: Copy snapshot ID to clipboard
-echo "$SNAP_ID" | pbcopy
+# Step 5: Show Apple-style notification overlay (JXA)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NOTIFY_JS="${SCRIPT_DIR}/capture-daemon/Sources/AppshotNotify/notify.js"
+ICON_PNG="${SCRIPT_DIR}/QClaw.png"
+
+if [ -f "$NOTIFY_JS" ]; then
+    osascript -l JavaScript "$NOTIFY_JS" "${APP_NAME}" "${ICON_PNG}" &
+fi
 
 echo "✅ $APP_NAME — $TITLE ($TEXT_LEN chars)"

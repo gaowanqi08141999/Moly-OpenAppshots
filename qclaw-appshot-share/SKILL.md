@@ -1,11 +1,12 @@
 ---
 name: appshot
 description: |
-  macOS 屏幕截图与窗口上下文捕获。支持两种捕获方式：
-  1. Hotkey 模式（推荐）— 用户在目标窗口按快捷键，daemon 捕获后 agent 通过 list_appshots/get_appshot 查询
-  2. 直接调用 — take_appshot 捕获当前前台窗口
-  适用于用户说"帮我看看这个"、"截图看看"、"这个报错是什么"、"分析最新截图"等场景。
-version: 1.3.0
+  macOS screenshot + accessibility text capture for any window.
+  Two capture modes:
+  1. Hotkey (recommended) — user presses shortcut on target window, daemon captures, agent queries via list_appshots/get_appshot
+  2. Direct call — take_appshot captures current frontmost window
+  Use when user says "analyze this", "what's on my screen", "check this error", "look at latest screenshot", etc.
+version: 1.4.0
 platforms: [macos]
 metadata:
   hermes:
@@ -13,132 +14,119 @@ metadata:
     category: desktop
 ---
 
-# Appshot — 屏幕截图与窗口上下文
+# Appshot — Screenshot & Window Context
 
-## 核心概念：Hotkey 捕获 vs 直接调用
+## Core Concept: Hotkey vs Direct Call
 
-### 问题：为什么 take_appshot 总是截到终端？
+### Problem: Why does take_appshot capture Terminal?
 
-当你通过 Hermes 对话调用 `take_appshot` 时，Hermes 运行在终端里，终端就是"前台窗口"。
-所以 `take_appshot` 会截到终端，而不是你正在看的 Chrome/Figma/IDE。
+When you call `take_appshot` through Hermes, Hermes runs inside Terminal, so Terminal IS the "frontmost window". You'll capture Terminal instead of Chrome/Figma/IDE.
 
-### 解决方案：Hotkey 先捕获，再查询
-
-正确的用法是两步：
+### Solution: Hotkey First, Query Later
 
 ```
-用户操作（在目标窗口）      Hermes 操作（在对话中）
-─────────────────────      ─────────────────────
-1. 按快捷键 📸              （daemon 捕获 Chrome）
-2. 切回 Hermes 对话         
-3. "分析最新截图"           → list_appshots(limit=1)
-                            → get_appshot(id, include_image=true)
-                            → 返回分析结果
+User action (in target window)      Hermes (in conversation)
+─────────────────────────────      ─────────────────────────
+1. Press ⌃⌥⌘Space on target app    (daemon captures silently)
+2. Switch back to Hermes
+3. "Analyze latest screenshot"     → list_appshots(limit=1)
+                                   → get_appshot(id, include_image=true)
+                                   → Returns analysis
 ```
 
-## 可用工具
+## Available Tools
 
-| 工具 | 用途 | 关键参数 |
-|------|------|----------|
-| `take_appshot` | 捕获当前前台窗口（适合你正在 Hermes 里看的内容） | 无 |
-| `list_appshots` | 浏览历史快照、获取最新截图 | app_name, date_from, date_to, limit, offset |
-| `get_appshot` | 获取单个快照完整内容（base64图片+AX树+全文） | snapshot_id (必填), include_image, include_ax_tree |
-| `search_appshots` | 搜索历史快照 | query (必填), search_in |
-| `delete_appshot` | 删除指定快照 | snapshot_id (必填) |
+| Tool | Purpose | Key Parameters |
+|------|---------|---------------|
+| `take_appshot` | Capture current frontmost window | None (optional: pid) |
+| `list_appshots` | Browse capture history, get latest | app_name, date_from, date_to, limit, offset |
+| `get_appshot` | Full detail of one snapshot | snapshot_id (required), include_image, include_ax_tree, image_max_width |
+| `search_appshots` | Search by keyword | query (required), search_in |
+| `delete_appshot` | Delete a snapshot | snapshot_id (required) |
 
-## 何时使用
+## When to Use Each Tool
 
-### 使用 list_appshots + get_appshot（最常用）
+### list_appshots + get_appshot (Most Common)
 
-当用户说：
-- "分析一下我刚截的图"、"看看最新截图"
-- "帮我看看这个页面"（用户已在目标窗口按过热键）
-- "对比我两次截图"
+Use when user says:
+- "Analyze my latest screenshot" / "What did I just capture?"
+- "Look at this page" (user already pressed hotkey on target app)
+- "Compare my last two screenshots"
 
-**操作流程：**
-1. `list_appshots(limit=1)` → 获取最新快照 ID
-2. 检查 `appName` 是否匹配用户描述的应用
-3. `get_appshot(id, include_image=true)` → 获取完整截图和 AX 文本
-4. 基于 full_text 分析内容，需要视觉细节时参考 image_base64
+**Flow:**
+1. `list_appshots(limit=1)` → get latest snapshot ID
+2. Check `appName` matches what user describes
+3. `get_appshot(id, include_image=true)` → get text + image
+4. Analyze based on `full_text`; use `image_base64` for visual details
 
-### 使用 take_appshot（特定场景）
+### take_appshot (Specific Cases)
 
-仅当用户想截的内容就在 Hermes/终端中时使用：
-- 用户在终端里跑命令，想让你看输出
-- 用户在 Hermes 对话中贴了代码，想让你看整个窗口上下文
+Only when the target IS Hermes/Terminal itself:
+- User wants you to see terminal output
+- User pasted code and wants context of the full window
 
-### 使用 search_appshots
+### search_appshots
 
-- "帮我找一下之前截的 Figma 设计稿"
-- "搜一下包含 'error' 的截图"
+- "Find my Figma screenshots from last week"
+- "Search captures containing 'error'"
 
-## 使用模式
+## get_appshot Token Budget
 
-### 模式 1: Hotkey → 查询（推荐，解决"截到终端"问题）
+| Mode | Tokens | When |
+|------|--------|------|
+| text-only (default) | ~2K | Most analysis tasks — reading text, extracting data |
+| image @500px | ~70K | Layout analysis, UI review |
+| image @800px | ~155K | Detailed visual inspection |
+| + AX tree | +40K | Debugging accessibility, spatial analysis |
+
+**Default:** `include_image=False`, `include_ax_tree=False`. Only request what you need.
+
+## Usage Patterns
+
+### Pattern 1: Hotkey → Query (Primary)
 
 ```
-用户按快捷键 → 截图已存入 daemon
-用户说 "分析最新截图"
+User presses hotkey on target → screenshot saved to daemon
+User says "analyze latest screenshot"
 → list_appshots(limit=1)
-→ get_appshot(id, include_image=true)  # 如果需要视觉
-→ 基于 full_text 分析并回答
+→ get_appshot(id, include_image=true)
+→ Analyze and respond
 ```
 
-### 模式 2: 跨应用对比
+### Pattern 2: Cross-App Comparison
 
 ```
-用户分别在 Chrome、Figma、VS Code 按快捷键
-用户说 "对比我最近 3 张截图"
+User captures Chrome, Figma, VS Code in sequence
+User says "compare my last 3 screenshots"
 → list_appshots(limit=3)
-→ 分别 get_appshot 获取详情
-→ 对比分析
+→ get_appshot for each as needed
+→ Compare and analyze
 ```
 
-### 模式 3: 搜索历史
+### Pattern 3: Text Extraction (No Image)
 
 ```
-用户说 "搜一下上周的 Figma 截图"
-→ search_appshots(query="Figma") 或 list_appshots(app_name="Figma")
-→ 列出匹配项
-→ get_appshot(id) 获取需要的那个
+User captures a web page / document
+User says "extract all comments with authors"
+→ list_appshots(limit=1)
+→ get_appshot(id)  # text-only, no image needed
+→ Parse full_text and extract requested data
 ```
-
-## 重要细节
-
-### list_appshots 返回
-
-- items 按时间倒序排列，第一条就是最新截图
-- 每条包含 textPreview（前 500 字符），通常足够判断是否需要进一步获取
-- 不包含 base64 图片数据（减少 token 消耗）
-
-### get_appshot 返回
-
-- `image_base64`: base64 编码的 PNG 截图（2048px 宽）
-- `full_text`: 从 Accessibility Tree 提取的完整文本
-- `accessibility_tree`: 完整的 AX 树 JSON 结构
-- `metadata`: 应用名、窗口标题、时间戳等
-
-### 判断需不需要 get_appshot
-
-- 大部分场景 textPreview 足够 — 比如"这是什么应用"、"窗口标题是什么"
-- 需要看到具体内容时用 get_appshot — 比如"分析这个页面的布局"、"这个报错的完整内容"
 
 ## Fallback
 
-如果 appshot 工具不可用（daemon 未启动、权限未授予），使用系统命令：
+If tools are unavailable (daemon not running, permissions missing), use:
 
 ```bash
-# 截取当前前台窗口
+# Screenshot only
 screencapture -w /tmp/window.png
-```
 
-配合 `osascript` 获取前台应用信息：
-```bash
+# Get frontmost app info
 osascript -e 'tell application "System Events" to get name of first process whose frontmost is true'
 ```
 
-## 仅支持 macOS
+## Requirements
 
-本工具仅适用于 macOS 14.0+。需要：
-- 后台 daemon 在运行（端口 19876，检查 `curl http://127.0.0.1:19876/health`）
-- 终端应用已获得「屏幕录制」和「辅助功能」权限
+- macOS 14.0+
+- Capture daemon running on port 19876 (`curl http://127.0.0.1:19876/health`)
+- Terminal app granted Screen Recording + Accessibility permissions

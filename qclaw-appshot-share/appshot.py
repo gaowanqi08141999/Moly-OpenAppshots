@@ -1,7 +1,7 @@
 """
 Hermes Agent tool registration — QClaw Appshots.
 Direct HTTP calls to the capture daemon (127.0.0.1:19876).
-Zero MCP dependency — avoids protocol version mismatch issues.
+Zero MCP dependency.
 """
 
 import json
@@ -42,12 +42,17 @@ def _daemon_request(method: str, path: str, timeout: int = 60) -> dict:
         return {"error": str(e)}
 
 
-# ── Tool handlers (synchronous — use urllib, no async needed) ──
+# ── Tool handlers ──
 
 
 def take_appshot(args: dict, **kwargs) -> str:
     """Capture the current frontmost macOS window."""
-    result = _daemon_request("POST", "/capture", timeout=30)
+    # Support PID-aware capture if caller provides it
+    pid = args.get("pid")
+    path = "/capture"
+    if pid:
+        path += f"?pid={pid}"
+    result = _daemon_request("POST", path, timeout=30)
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
@@ -82,7 +87,7 @@ def get_appshot(args: dict, **kwargs) -> str:
     include_ax_tree = args.get("include_ax_tree", False)
     image_max_width = args.get("image_max_width", 800)
 
-    # Fetch metadata + fullText (always lightweight)
+    # Fetch metadata + fullText (always lightweight, ~2K tokens)
     data = _daemon_request("GET", f"/snapshots/{urllib.parse.quote(snapshot_id)}")
     if "error" in data:
         return json.dumps(data, ensure_ascii=False, indent=2)
@@ -93,7 +98,7 @@ def get_appshot(args: dict, **kwargs) -> str:
     if "fullText" in data:
         output["full_text"] = data["fullText"]
 
-    # axTree — only when explicitly requested (expensive: ~40K tokens)
+    # axTree — only when explicitly requested (~40K tokens)
     if include_ax_tree and "axTree" in data:
         output["accessibility_tree"] = data["axTree"]
 
@@ -163,7 +168,9 @@ registry.register(
             "3. Metadata — app name, window title, timestamp\n\n"
             "Use when: user asks 'what's on my screen', 'analyze this page', "
             "'what does this error say', or needs visual context from any app.\n"
-            "No parameters needed — auto-detects the frontmost window."
+            "Note: captures current frontmost window. For capturing OTHER apps, "
+            "advise user to press the hotkey (⌃⌥⌘Space) on the target window first, "
+            "then use list_appshots + get_appshot to retrieve."
         ),
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
@@ -182,12 +189,14 @@ registry.register(
         "name": "list_appshots",
         "description": (
             "Browse historical snapshots with optional filters. "
-            "Returns summaries (no full images or AX trees)."
+            "Returns summaries (no full images or AX trees). "
+            "Items are ordered by time (newest first). "
+            "Use this to find snapshots captured via hotkey."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "app_name": {"type": "string", "description": "Filter by app name (fuzzy match)"},
+                "app_name": {"type": "string", "description": "Filter by app name"},
                 "date_from": {"type": "string", "description": "Start date YYYY-MM-DD"},
                 "date_to": {"type": "string", "description": "End date YYYY-MM-DD"},
                 "limit": {"type": "integer", "description": "Max results, default 20, max 100"},
@@ -209,16 +218,28 @@ registry.register(
         "name": "get_appshot",
         "description": (
             "Get full snapshot detail. By default returns metadata + fullText only (~2K tokens). "
-            "Use include_image=true only when visual analysis is needed (~10K tokens at 800px). "
+            "Use include_image=true only when visual analysis is needed (~10K-155K tokens depending on width). "
             "Use include_ax_tree=true only for spatial/debug analysis (~40K tokens)."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "snapshot_id": {"type": "string", "description": "Snapshot ID from list_appshots or take_appshot"},
-                "include_image": {"type": "boolean", "description": "Include resized base64 screenshot. Default false to save tokens."},
-                "include_ax_tree": {"type": "boolean", "description": "Include full AX tree JSON. Default false to save tokens."},
-                "image_max_width": {"type": "integer", "description": "Max image width in pixels, default 800. Lower = fewer tokens."},
+                "snapshot_id": {
+                    "type": "string",
+                    "description": "Snapshot ID from list_appshots or take_appshot"
+                },
+                "include_image": {
+                    "type": "boolean",
+                    "description": "Include resized base64 screenshot. Default false (saves tokens)."
+                },
+                "include_ax_tree": {
+                    "type": "boolean",
+                    "description": "Include full AX tree JSON. Default false (saves tokens)."
+                },
+                "image_max_width": {
+                    "type": "integer",
+                    "description": "Max image width in pixels, default 800. Lower = fewer tokens."
+                },
             },
             "required": ["snapshot_id"],
         },

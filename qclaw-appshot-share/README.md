@@ -1,57 +1,53 @@
-# QClaw Appshots — 给你的 Hermes 装上"眼睛"
+# QClaw Appshot — macOS Screenshot + Accessibility Text Capture
 
-让你能截图 Chrome/Figma/IDE 等任意应用，然后让 Hermes 分析内容。
+Shareable plugin package for Hermes Agent.
 
-## 核心用法（30 秒上手）
+## What it does
 
-```
-1. 打开 Chrome（或任意目标应用）
-2. 按快捷键 ⌃⌥⌘A
-3. 切回 Hermes，说 "分析最新截图"
-4. Hermes 告诉你能看到什么
-```
+Captures the frontmost macOS window in two layers simultaneously:
+1. **Visual layer** — High-fidelity PNG screenshot (Retina 2x) via ScreenCaptureKit
+2. **Text layer** — Full accessibility text tree via macOS Accessibility API
 
-**为什么不是直接让 Hermes 截图？** 因为 Hermes 跑在终端里，直接调 `take_appshot` 只能截到终端。快捷键方案让你在目标窗口按一下，daemon 在后台捕获，然后 Hermes 通过 `list_appshots` + `get_appshot` 查询结果。
+Everything runs locally — no cloud uploads, no API keys.
 
-## 文件说明
-
-| 文件 | 给谁 | 用途 |
-|------|------|------|
-| `SKILL.md` | Hermes 智能体 | 教它 hotkey 工作流和工具用法 |
-| `INSTALL.md` | Hermes 智能体 | 自动安装指南 |
-| `appshot.py` | Hermes 工具系统 | 5 个工具注册（放到 tools/ 目录） |
-| `capture-hotkey.sh` | 用户 | 快捷键触发脚本 |
-| `README.md` | 人类 | 这份文件 |
-
-## 安装
-
-### 给人类看（手动 3 步）
+## Quick Start
 
 ```bash
-# 1. 编译 daemon
-cd ../capture-daemon && swift build -c debug
+# 1. Build & start the daemon
+cd capture-daemon && make build && make run &
 
-# 2. 复制文件
-cp appshot.py ~/.hermes/hermes-agent/tools/
-mkdir -p ~/.hermes/skills/appshot && cp SKILL.md ~/.hermes/skills/appshot/
-cp capture-hotkey.sh ~/bin/appshot-capture && chmod +x ~/bin/appshot-capture
+# 2. Test it
+curl -X POST http://127.0.0.1:19876/capture
 
-# 3. 启动 daemon
-QCLAW_SNAPSHOT_DIR="$HOME/snapshots" QCLAW_PORT=19876 \
-  ../capture-daemon/.build/debug/QClawDaemon &
+# 3. Install Hermes plugin
+cp appshot.py ~/.hermes/tools/
+cp SKILL.md ~/.hermes/skills/appshot/
+
+# 4. Set up hotkey (Shortcuts.app)
+#    Run Shell Script: bash /path/to/capture-hotkey.sh
+#    Bind to: ⌃⌥⌘Space
 ```
 
-然后设置快捷键（Shortcuts.app 或 Automator，详见 INSTALL.md 步骤 7），重启 Hermes。
+## Requirements
 
-### 给 Hermes 自动装
+- macOS 14.0+
+- Screen Recording permission (System Settings → Privacy)
+- Accessibility permission (System Settings → Privacy)
+- Hermes Agent (for AI integration)
 
-把 `INSTALL.md` 的内容发给 Hermes，说：
+## Files
 
-> 请按照这个文档，帮我安装 QClaw Appshots 插件
+| File | Purpose |
+|------|---------|
+| `appshot.py` | Hermes tool registrations (5 tools) |
+| `SKILL.md` | Agent skill instructions |
+| `capture-hotkey.sh` | PID-aware hotkey script |
+| `notify.js` | Apple-style notification overlay (JXA) |
+| `INSTALL.md` | Detailed installation guide |
 
-Hermes 会自动执行除快捷键绑定外的所有步骤。
+## Token Efficiency
 
-### 前置条件
-
-- macOS 14.0+、Swift 5.9+、Hermes Agent
-- 系统偏好设置 → 屏幕录制 + 辅助功能 → 勾选终端
+The tools are optimized for minimal token consumption:
+- `get_appshot` returns text-only by default (~2K tokens)
+- Image and AX tree are opt-in via `include_image` / `include_ax_tree`
+- Server-side image resize at configurable widths (400-800px)

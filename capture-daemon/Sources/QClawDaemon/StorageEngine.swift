@@ -96,7 +96,17 @@ final class StorageEngine {
             throw StorageError.sqliteError(String(cString: sqlite3_errmsg(db)))
         }
 
-        return result.summary
+        return SnapshotSummary(
+            id: result.summary.id,
+            timestamp: result.summary.timestamp,
+            appName: result.summary.appName,
+            bundleID: result.summary.bundleID,
+            windowTitle: result.summary.windowTitle,
+            textPreview: result.summary.textPreview,
+            textLength: result.summary.textLength,
+            elementCount: result.summary.elementCount,
+            dirPath: snapDir.path
+        )
     }
 
     // MARK: - Query

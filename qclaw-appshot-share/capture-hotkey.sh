@@ -1,16 +1,11 @@
 #!/bin/bash
-# QClaw Appshot — Hotkey Capture Script
-# Captures the CURRENT frontmost window (whatever the user is looking at),
-# even when the shortcut runner briefly steals focus.
-#
-# The key trick: we grab the frontmost app's PID BEFORE anything else runs,
-# then tell the daemon to capture THAT app specifically, ignoring whatever
-# happens to be frontmost by the time the HTTP request arrives.
+# QClaw Appshot — Hotkey Capture Script (Standalone Share Version)
+# Captures the CURRENT frontmost window without focus-stealing.
+# All companion files (notify.js, QClaw.png) are in the same directory.
 
 DAEMON_URL="${QCLAW_DAEMON_URL:-http://127.0.0.1:19876}"
 
 # Step 1: Get the REAL frontmost app's PID — BEFORE any focus change
-# System Events query is read-only and won't steal focus
 FRONTMOST_PID=$(osascript -e 'tell application "System Events" to get unix id of first process whose frontmost is true' 2>/dev/null)
 
 if [ -z "$FRONTMOST_PID" ]; then
@@ -37,11 +32,14 @@ if [ -z "$APP_NAME" ] || [ "$APP_NAME" = "?" ]; then
     exit 1
 fi
 
-# Step 4: Show dialog — auto-dismiss after 2 seconds, or click OK
-# Escape double quotes in variables for AppleScript string safety
-ESC_APP="${APP_NAME//\"/\\\"}"
-ESC_TITLE="${TITLE//\"/\\\"}"
-osascript -e "display dialog \"截图已保存 ✅\n\n${ESC_APP}\n${ESC_TITLE}\n文本: ${TEXT_LEN} chars\" with title \"Appshot Captured\" buttons {\"OK\"} default button \"OK\" giving up after 2" 2>/dev/null
+# Step 4: Show Apple-style notification overlay (JXA)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NOTIFY_JS="${SCRIPT_DIR}/notify.js"
+ICON_PNG="${SCRIPT_DIR}/QClaw.png"
+
+if [ -f "$NOTIFY_JS" ]; then
+    osascript -l JavaScript "$NOTIFY_JS" "${APP_NAME}" "${ICON_PNG}" &
+fi
 
 # Step 5: Copy snapshot ID to clipboard
 echo "$SNAP_ID" | pbcopy

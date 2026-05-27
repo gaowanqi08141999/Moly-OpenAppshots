@@ -101,6 +101,7 @@ struct SnapshotSummary: Codable {
     let textPreview: String
     let textLength: Int
     let elementCount: Int
+    let dirPath: String
 }
 
 struct SnapshotListResponse: Codable {
