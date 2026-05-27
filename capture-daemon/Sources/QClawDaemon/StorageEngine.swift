@@ -172,7 +172,7 @@ final class StorageEngine {
             items.append(SnapshotSummary(
                 id: id, timestamp: ts, appName: app, bundleID: bid,
                 windowTitle: title, textPreview: preview,
-                textLength: tlen, elementCount: ecount
+                textLength: tlen, elementCount: ecount, dirPath: dirPath
             ))
         }
 

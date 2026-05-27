@@ -72,7 +72,8 @@ final class CaptureEngine: @unchecked Sendable {
             windowTitle: windowTitle,
             textPreview: String(tree.flattenText().prefix(500)),
             textLength: tree.flattenText().count,
-            elementCount: tree.elementCount
+            elementCount: tree.elementCount,
+            dirPath: ""
         )
 
         return CaptureResult(pngData: png, axTree: tree, metadata: metadata, summary: summary)
