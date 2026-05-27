@@ -12,5 +12,10 @@ let package = Package(
             path: "Sources/QClawDaemon",
             swiftSettings: [.enableUpcomingFeature("BareSlashRegexLiterals")]
         ),
+        .executableTarget(
+            name: "AppshotNotify",
+            dependencies: [],
+            path: "Sources/AppshotNotify"
+        ),
     ]
 )

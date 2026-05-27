@@ -1,10 +1,14 @@
-.PHONY: build run clean setup-permissions
+.PHONY: build run clean setup-permissions notify
 
 BUILD_DIR := .build/debug
 BINARY := $(BUILD_DIR)/QClawDaemon
+NOTIFY_BIN := $(BUILD_DIR)/AppshotNotify
 
 build:
 	swift build
+
+notify:
+	swift build --target AppshotNotify
 
 run: build
 	$(BINARY)

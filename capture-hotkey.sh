@@ -37,8 +37,20 @@ if [ -z "$APP_NAME" ] || [ "$APP_NAME" = "?" ]; then
     exit 1
 fi
 
-# Step 4: Notify user
-osascript -e "display notification \"${TITLE}\nText: ${TEXT_LEN} chars\" with title \"📸 ${APP_NAME}\" subtitle \"Appshot captured\"" 2>/dev/null
+# Step 4: Show notification overlay
+# Prefer native AppshotNotify binary for Apple-style frosted-glass overlay.
+# Fall back to osascript dialog if binary not found.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+NOTIFY_BIN="${SCRIPT_DIR}/capture-daemon/.build/debug/AppshotNotify"
+
+if [ -x "$NOTIFY_BIN" ]; then
+    "$NOTIFY_BIN" "${APP_NAME}" &
+else
+    # Fallback: plain osascript dialog
+    ESC_APP="${APP_NAME//\"/\\\"}"
+    ESC_TITLE="${TITLE//\"/\\\"}"
+    osascript -e "display dialog \"截图已保存 ✅\n\n${ESC_APP}\n${ESC_TITLE}\n文本: ${TEXT_LEN} chars\" with title \"Appshot Captured\" buttons {\"OK\"} default button \"OK\" giving up after 2" 2>/dev/null
+fi
 
 # Step 5: Copy snapshot ID to clipboard
 echo "$SNAP_ID" | pbcopy
