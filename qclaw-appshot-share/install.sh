@@ -88,6 +88,16 @@ if ! grep -q "$INSTALL_DIR/bin" "$HOME/.zshrc" 2>/dev/null; then
     print_step "Added ~/.qclaw/bin to PATH (restart terminal to use 'qclawd' directly)"
 fi
 
+# ── Install notification assets ──
+print_step "Installing notification assets..."
+
+if [[ -f "${SCRIPT_DIR}/notify.js" ]]; then
+    cp "${SCRIPT_DIR}/notify.js" "$INSTALL_DIR/notify.js"
+fi
+if [[ -f "${SCRIPT_DIR}/QClaw.png" ]]; then
+    cp "${SCRIPT_DIR}/QClaw.png" "$INSTALL_DIR/QClaw.png"
+fi
+
 # ── Install Hermes plugin ──
 print_step "Installing Hermes plugin..."
 
@@ -161,16 +171,11 @@ echo "3. Restart the daemon after granting permissions:"
 echo "   killall qclawd; qclawd &"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Next: Set up the hotkey in Shortcuts.app"
+echo -e "${GREEN}Hotkey is ready!${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "1. Open Shortcuts.app"
-echo "2. Create new shortcut → name it 'Capture Appshot'"
-echo "3. Add 'Run Shell Script' action"
-echo "4. Paste: bash ${SCRIPT_DIR}/capture-hotkey.sh"
-echo "5. (i) info → 'Use as Quick Action' → Add Keyboard Shortcut"
-echo "6. Bind to: ⌃⌥⌘Space (or your choice)"
-echo "7. Set: no input, any application"
+echo "Press ⌃⌥⌘Space to capture any window."
+echo "The screenshot PNG is automatically copied to your clipboard."
 echo ""
 echo "Then restart Hermes and try: 'Take an appshot'"
 echo ""

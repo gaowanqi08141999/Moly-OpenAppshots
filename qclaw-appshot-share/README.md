@@ -15,6 +15,19 @@ Everything runs locally — no cloud uploads, no API keys.
 ## Quick Start
 
 ```bash
+# One-line install
+chmod +x install.sh && ./install.sh
+
+# Then grant permissions when prompted:
+#   System Settings → Privacy & Security → Screen Recording → Enable QClawDaemon
+#   System Settings → Privacy & Security → Accessibility → Enable QClawDaemon
+
+# Press ⌃⌥⌘Space to capture any window. Screenshot auto-copied to clipboard.
+```
+
+Or manually:
+
+```bash
 # 1. Build & start the daemon
 cd capture-daemon && make build && make run &
 
@@ -25,9 +38,7 @@ curl -X POST http://127.0.0.1:19876/capture
 cp appshot.py ~/.hermes/tools/
 cp SKILL.md ~/.hermes/skills/appshot/
 
-# 4. Set up hotkey (Shortcuts.app)
-#    Run Shell Script: bash /path/to/capture-hotkey.sh
-#    Bind to: ⌃⌥⌘Space
+# 4. Press ⌃⌥⌘Space (daemon listens natively — no Shortcuts.app needed)
 ```
 
 ## Requirements

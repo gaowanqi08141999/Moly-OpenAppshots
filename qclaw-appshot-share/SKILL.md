@@ -132,4 +132,5 @@ osascript -e 'tell application "System Events" to get name of first process whos
 
 - macOS 14.0+
 - Capture daemon running on port 19876 (`curl http://127.0.0.1:19876/health`)
-- Terminal app granted Screen Recording + Accessibility permissions
+- Screen Recording + Accessibility permissions for QClawDaemon
+- **No Shortcuts.app needed** — hotkey (⌃⌥⌘Space) is built into the daemon

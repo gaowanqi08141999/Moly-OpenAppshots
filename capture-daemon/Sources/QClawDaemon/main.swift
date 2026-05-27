@@ -21,21 +21,18 @@ do {
     exit(1)
 }
 
-// Start hotkey listener in background
-let hotkey = HotkeyListener()
-hotkey.onTrigger = {
-    Task {
-        print("[Hotkey] Capturing...")
-        do {
-            let result = try await engine.captureFrontmost()
-            let summary = try storage.save(result)
-            print("[Hotkey] Captured: \(summary.appName) — \(summary.windowTitle)")
-            print("[Hotkey]    Text: \(summary.textLength) chars, Elements: \(summary.elementCount)")
-        } catch {
-            print("[Hotkey] Capture failed: \(error)")
-        }
-    }
-}
+// Resolve paths for notification assets (copied by install.sh to ~/.qclaw/)
+let home = FileManager.default.homeDirectoryForCurrentUser.path
+let notifyScriptPath = "\(home)/.qclaw/notify.js"
+let iconPath = "\(home)/.qclaw/QClaw.png"
+
+// Start hotkey listener in background (⌃⌥⌘Space)
+let hotkey = HotkeyListener(
+    engine: engine,
+    storage: storage,
+    notifyScriptPath: FileManager.default.fileExists(atPath: notifyScriptPath) ? notifyScriptPath : nil,
+    iconPath: FileManager.default.fileExists(atPath: iconPath) ? iconPath : nil
+)
 
 let hotkeyThread = Thread {
     hotkey.start()
