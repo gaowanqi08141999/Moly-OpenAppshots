@@ -1,4 +1,4 @@
-.PHONY: build run clean setup-permissions notify
+.PHONY: build install run clean setup-permissions notify
 
 BUILD_DIR := .build/debug
 BINARY := $(BUILD_DIR)/QClawDaemon
@@ -6,6 +6,13 @@ NOTIFY_BIN := $(BUILD_DIR)/AppshotNotify
 
 build:
 	swift build
+
+install: build
+	@mkdir -p ~/.qclaw-appshot/bin
+	@cp $(BINARY) ~/.qclaw-appshot/bin/qclawd
+	@chmod +x ~/.qclaw-appshot/bin/qclawd
+	@echo "Installed to ~/.qclaw-appshot/bin/qclawd"
+	@echo "Restart with: killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &"
 
 notify:
 	swift build --target AppshotNotify

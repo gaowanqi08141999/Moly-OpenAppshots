@@ -5,6 +5,35 @@ import Foundation
 print("QClaw Appshot Daemon v0.1.0")
 print("")
 
+// ── Path Guard: enforce fixed install path for macOS TCC permissions ──
+let expectedPath = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent(".qclaw-appshot/bin/qclawd").path
+if let actualPath = Bundle.main.executablePath {
+    let resolvedActual = (actualPath as NSString).resolvingSymlinksInPath
+    let resolvedExpected = (expectedPath as NSString).resolvingSymlinksInPath
+    if resolvedActual != resolvedExpected {
+        print("╔════════════════════════════════════════════════════════════════╗")
+        print("║  ⚠️  WARNING: Daemon running from unexpected path            ║")
+        print("╠════════════════════════════════════════════════════════════════╣")
+        print("║  Current:  \(resolvedActual)                                  ")
+        print("║  Expected: \(resolvedExpected)                                ")
+        print("╠════════════════════════════════════════════════════════════════╣")
+        print("║  macOS permissions (Screen Recording / Accessibility) are    ║")
+        print("║  bound to the binary PATH. Running from a different path     ║")
+        print("║  means those permissions WILL NOT APPLY.                     ║")
+        print("║                                                              ║")
+        print("║  FIX:                                                        ║")
+        print("║  1. Kill this daemon:   killall QClawDaemon                  ║")
+        print("║  2. Copy to fix path:   cp \(resolvedActual) \(resolvedExpected)")
+        print("║  3. Restart:            \(resolvedExpected) &                 ")
+        print("║  4. Grant permissions in System Settings → Privacy           ║")
+        print("╚════════════════════════════════════════════════════════════════╝")
+        print("")
+    }
+} else {
+    print("[Warning] Could not determine executable path")
+}
+
 let snapshotDir = ProcessInfo.processInfo.environment["QCLAW_SNAPSHOT_DIR"]
     ?? "~/snapshots"
 let portStr = ProcessInfo.processInfo.environment["QCLAW_PORT"] ?? "19876"
