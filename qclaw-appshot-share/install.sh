@@ -6,7 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DAEMON_BIN="${SCRIPT_DIR}/QClawDaemon"
-INSTALL_DIR="$HOME/.qclaw"
+INSTALL_DIR="$HOME/.qclaw-appshot"
 HERMES_TOOLS_DIR="$HOME/.hermes/hermes-agent/tools"
 HERMES_SKILLS_DIR="$HOME/.hermes/skills/appshot"
 

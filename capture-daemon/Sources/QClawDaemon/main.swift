@@ -21,11 +21,11 @@ do {
     exit(1)
 }
 
-// Resolve paths for notification assets (copied by install.sh to ~/.qclaw/)
+// Resolve paths for notification assets (copied by install.sh to ~/.qclaw-appshot/)
 let home = FileManager.default.homeDirectoryForCurrentUser.path
-let notifyScriptPath = "\(home)/.qclaw/notify.js"
-let iconPath = "\(home)/.qclaw/QClaw.png"
-let flashScriptPath = "\(home)/.qclaw/flash.js"
+let notifyScriptPath = "\(home)/.qclaw-appshot/notify.js"
+let iconPath = "\(home)/.qclaw-appshot/QClaw.png"
+let flashScriptPath = "\(home)/.qclaw-appshot/flash.js"
 
 // Start hotkey listener in background (⌃⌥⌘Space)
 let hotkey = HotkeyListener(
