@@ -25,13 +25,15 @@ do {
 let home = FileManager.default.homeDirectoryForCurrentUser.path
 let notifyScriptPath = "\(home)/.qclaw/notify.js"
 let iconPath = "\(home)/.qclaw/QClaw.png"
+let flashScriptPath = "\(home)/.qclaw/flash.js"
 
 // Start hotkey listener in background (⌃⌥⌘Space)
 let hotkey = HotkeyListener(
     engine: engine,
     storage: storage,
     notifyScriptPath: FileManager.default.fileExists(atPath: notifyScriptPath) ? notifyScriptPath : nil,
-    iconPath: FileManager.default.fileExists(atPath: iconPath) ? iconPath : nil
+    iconPath: FileManager.default.fileExists(atPath: iconPath) ? iconPath : nil,
+    flashScriptPath: FileManager.default.fileExists(atPath: flashScriptPath) ? flashScriptPath : nil
 )
 
 let hotkeyThread = Thread {

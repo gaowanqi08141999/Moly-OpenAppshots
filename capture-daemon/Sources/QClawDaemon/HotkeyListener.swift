@@ -11,15 +11,18 @@ final class HotkeyListener: @unchecked Sendable {
     private let storage: StorageEngine
     private let notifyScriptPath: String?
     private let iconPath: String?
+    private let flashScriptPath: String?
 
     init(engine: CaptureEngine,
          storage: StorageEngine,
          notifyScriptPath: String? = nil,
-         iconPath: String? = nil) {
+         iconPath: String? = nil,
+         flashScriptPath: String? = nil) {
         self.engine = engine
         self.storage = storage
         self.notifyScriptPath = notifyScriptPath
         self.iconPath = iconPath
+        self.flashScriptPath = flashScriptPath
     }
 
     /// Start listening for ⌃⌥⌘Space.
@@ -78,6 +81,9 @@ final class HotkeyListener: @unchecked Sendable {
 
         // Hotkey matched — consume the event (don't pass to other apps)
         print("[Hotkey] ⌃⌥⌘Space triggered!")
+
+        // Immediate visual feedback (non-blocking)
+        showFlash()
 
         Task { [weak self] in
             await self?.performCapture()
@@ -156,6 +162,23 @@ final class HotkeyListener: @unchecked Sendable {
             try task.run()
         } catch {
             print("[Hotkey] ⚠️  Clipboard copy failed: \(error)")
+        }
+    }
+
+    /// Screen flash feedback — called immediately on hotkey press.
+    private func showFlash() {
+        guard let scriptPath = flashScriptPath,
+              FileManager.default.fileExists(atPath: scriptPath) else {
+            return
+        }
+
+        let task = Process()
+        task.launchPath = "/usr/bin/osascript"
+        task.arguments = ["-l", "JavaScript", scriptPath]
+        do {
+            try task.run()
+        } catch {
+            print("[Hotkey] ⚠️  Flash failed: \(error)")
         }
     }
 

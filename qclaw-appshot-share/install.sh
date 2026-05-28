@@ -94,6 +94,9 @@ print_step "Installing notification assets..."
 if [[ -f "${SCRIPT_DIR}/notify.js" ]]; then
     cp "${SCRIPT_DIR}/notify.js" "$INSTALL_DIR/notify.js"
 fi
+if [[ -f "${SCRIPT_DIR}/flash.js" ]]; then
+    cp "${SCRIPT_DIR}/flash.js" "$INSTALL_DIR/flash.js"
+fi
 if [[ -f "${SCRIPT_DIR}/QClaw.png" ]]; then
     cp "${SCRIPT_DIR}/QClaw.png" "$INSTALL_DIR/QClaw.png"
 fi
