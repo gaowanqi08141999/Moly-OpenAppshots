@@ -1,6 +1,6 @@
 # QClaw Appshot — macOS Screenshot + Accessibility Text Capture
 
-Shareable plugin package for Hermes Agent.
+Shareable plugin package for Hermes Agent, OpenClaw, Claude Desktop, Cursor, or any MCP client.
 
 ## What it does
 
@@ -46,7 +46,7 @@ cp SKILL.md ~/.hermes/skills/appshot/
 - macOS 14.0+
 - Screen Recording permission (System Settings → Privacy)
 - Accessibility permission (System Settings → Privacy)
-- Hermes Agent (for AI integration)
+- Hermes Agent (for AI integration) or any MCP-compatible client
 
 ## Files
 
@@ -54,7 +54,9 @@ cp SKILL.md ~/.hermes/skills/appshot/
 |------|---------|
 | `appshot.py` | Hermes tool registrations (5 tools) |
 | `SKILL.md` | Agent skill instructions |
-| `capture-hotkey.sh` | PID-aware hotkey script + auto clipboard copy |
+| `capture-hotkey.sh` | Standalone hotkey script (legacy, Shortcuts.app) |
+| `appshot_mcp.py` | MCP server for OpenClaw / Claude Desktop / Cursor |
+| `MCP_SETUP.md` | MCP configuration guide |
 | `notify.js` | Apple-style notification overlay (JXA, white rounded) |
 | `INSTALL.md` | Detailed installation guide |
 
