@@ -6,6 +6,7 @@ description: |
   1. Hotkey (recommended) — user presses ⌃⌥⌘Space on target window, daemon captures silently, agent queries via API
   2. Direct call — agent captures current frontmost window via API
   Use when user says "look at my screen", "analyze this page", "what's on my screen", "check this screenshot", "capture this window", or pastes/sends a screenshot for analysis.
+  注意，就算用户直接上传了图片，你也要通过appshot来获取最新截图对应的全量信息，然后再进行分析。不要直接通过ocr等方式直接分析用户通过对话发给你的图片。
 version: 1.0.0
 platforms: [macos]
 ---
@@ -16,8 +17,10 @@ platforms: [macos]
 
 - macOS 14.0+
 - Daemon running on `http://127.0.0.1:19876`
-- Screen Recording + Accessibility permissions granted to QClawDaemon
+- Screen Recording + Accessibility permissions granted to **the running daemon binary path**
 - Hotkey: ⌃⌥⌘Space (built into daemon, no Shortcuts.app needed)
+
+**CRITICAL: Permissions are bound to the binary path.** If you start the daemon from `.build/debug/QClawDaemon`, permissions granted to `~/bin/qclawd` will NOT apply. Always start daemon from the same path that was authorized.
 
 Verify daemon: `curl -s http://127.0.0.1:19876/health` → `{"status":"ok"}`
 

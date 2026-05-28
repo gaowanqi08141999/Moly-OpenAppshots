@@ -23,6 +23,9 @@ chmod +x install.sh && ./install.sh
 #      → + → ⌘⇧G → ~/.qclaw-appshot/bin/qclawd → toggle ON
 #    System Settings → Privacy & Security → Accessibility
 #      → + → ⌘⇧G → ~/.qclaw-appshot/bin/qclawd → toggle ON
+#
+#    ⚠️  Always use this exact path. Permissions are bound to the binary.
+#       Do NOT run .build/debug/QClawDaemon directly.
 
 # 3. Restart daemon
 killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
@@ -33,17 +36,25 @@ killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
 Or manually:
 
 ```bash
-# 1. Build & start the daemon
-cd capture-daemon && make build && make run &
+# 1. Build daemon
+cd capture-daemon && make build
 
-# 2. Test it
+# 2. Copy to fixed path (permissions stick to this path)
+mkdir -p ~/.qclaw-appshot/bin
+cp .build/debug/QClawDaemon ~/.qclaw-appshot/bin/qclawd
+
+# 3. Start daemon (always use this path)
+nohup ~/.qclaw-appshot/bin/qclawd > /dev/null 2>&1 &
+
+# 4. Test it
 curl -X POST http://127.0.0.1:19876/capture
 
-# 3. Install Hermes plugin
-cp appshot.py ~/.hermes/tools/
+# 5. Install Hermes plugin
+cp appshot.py ~/.hermes/hermes-agent/tools/
+mkdir -p ~/.hermes/skills/appshot/
 cp SKILL.md ~/.hermes/skills/appshot/
 
-# 4. Press ⌃⌥⌘Space (daemon listens natively — no Shortcuts.app needed)
+# 6. Press ⌃⌥⌘Space (daemon listens natively — no Shortcuts.app needed)
 ```
 
 ## Requirements

@@ -8,7 +8,7 @@ This guide is designed to be followed by either a human or an AI agent (Hermes/C
 - Xcode Command Line Tools: `xcode-select --install`
 - Hermes Agent installed
 
-## Step 1: Build & Start the Daemon
+## Step 1: Build & Install the Daemon
 
 ```bash
 # Clone or copy the capture-daemon repository
@@ -17,11 +17,17 @@ cd /path/to/capture-daemon
 # Build (Swift Package Manager)
 swift build
 
-# Run in background
-./.build/debug/QClawDaemon &
+# Copy to install.sh default path (permissions stick to this path — do NOT run directly from .build/debug/)
+mkdir -p ~/.qclaw-appshot/bin
+cp .build/debug/QClawDaemon ~/.qclaw-appshot/bin/qclawd
+
+# Run in background (always use this path)
+nohup ~/bin/qclawd > /dev/null 2>&1 &
 ```
 
 The daemon listens on `http://127.0.0.1:19876`.
+
+> ⚠️ **CRITICAL**: Always use `~/bin/qclawd`. macOS authorizes permissions by binary path. If you run `.build/debug/QClawDaemon` directly, permissions will not apply and AX tree will be empty.
 
 ## Step 2: Grant macOS Permissions (MANDATORY)
 
@@ -46,7 +52,7 @@ killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
 
 ```bash
 # Copy tool registrations
-cp appshot.py ~/.hermes/tools/
+cp appshot.py ~/.hermes/hermes-agent/tools/
 
 # Copy skill instructions
 mkdir -p ~/.hermes/skills/appshot/
@@ -102,6 +108,7 @@ In Hermes, say: "Take an appshot" or press the hotkey, then:
 | Daemon won't start | Port 19876 in use | `lsof -i :19876` then `killall qclawd` |
 | Capture returns empty / timeout | Screen Recording permission missing | Re-do Step 2 (Screen Recording) |
 | Hotkey not working | Accessibility permission missing | Re-do Step 2 (Accessibility) |
-| **AX tree empty (text_length=0)** | **Accessibility permission not granted to `~/.qclaw-appshot/bin/qclawd`** | **Re-do Step 2 (Accessibility). This is the #1 cause.** |
-| Tools not appearing in Hermes | appshot.py not in correct path | `cp appshot.py ~/.hermes/hermes-agent/tools/` |
+| **AX tree empty (text_length=0)** | **#1 cause: Running `.build/debug/QClawDaemon` directly. macOS permissions are bound to the binary path.** | **Kill daemon, then always start with `~/.qclaw-appshot/bin/qclawd`. Re-check System Settings → Accessibility that `~/.qclaw-appshot/bin/qclawd` is enabled.** |
+| AX tree empty (still) | Multiple daemon paths in Accessibility list, wrong one active | Remove ALL QClawDaemon entries from Accessibility, add ONLY `~/.qclaw-appshot/bin/qclawd`, restart daemon |
+| Tools not appearing in Hermes | appshot.py not in correct path or toolset not enabled | `cp appshot.py ~/.hermes/hermes-agent/tools/` and add `appshot` to `toolsets` in `~/.hermes/config.yaml` |
 | Web page text missing | Chrome AX Tree limitation | Normal — Web content is not exposed to macOS Accessibility API. Use screenshot image for visual analysis instead. |

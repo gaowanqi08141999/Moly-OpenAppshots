@@ -77,11 +77,13 @@ mkdir -p ~/.hermes/skills/appshot
 cp hermes-plugin/skills/appshot-context.md ~/.hermes/skills/appshot/SKILL.md
 ```
 
-### 步骤 3: 启动 daemon
+### 步骤 3: 启动 daemon（统一使用固定路径）
+
+⚠️ **重要**：始终使用 `~/bin/qclawd`（install.sh 安装的路径），**不要**直接运行 `.build/debug/QClawDaemon`。macOS 按二进制路径授权权限，路径变了权限就失效。
+
 ```bash
-QCLAW_SNAPSHOT_DIR="$HOME/snapshots" \
-QCLAW_PORT=19876 \
-./capture-daemon/.build/debug/QClawDaemon &
+# 启动（统一路径，install.sh 默认安装位置）
+nohup ~/.qclaw-appshot/bin/qclawd > /dev/null 2>&1 &
 ```
 
 ### 步骤 4: 授予权限
@@ -98,7 +100,7 @@ QCLAW_PORT=19876 \
 |------|------|------|
 | 工具不出现 | `appshot.py` 没放对位置 | 检查 `ls ~/.hermes/hermes-agent/tools/appshot.py` |
 | 捕获超时 | 没给屏幕录制权限 | 系统偏好设置 → 屏幕录制 |
-| AX 树为空 | 没给辅助功能权限 | 系统偏好设置 → 辅助功能 |
+| AX 树为空 | 辅助功能权限路径不匹配 | 确认系统设置里授权的是**实际运行的 daemon 路径**（`~/bin/qclawd`，不是 `.build/debug/QClawDaemon`） |
 | 连接被拒 | daemon 没启动 | `curl http://127.0.0.1:19876/health` |
 
 ---
