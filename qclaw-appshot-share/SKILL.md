@@ -1,179 +1,185 @@
 ---
-name: appshot
+name: qclaw-appshot
 description: |
-  macOS screenshot + accessibility text capture for any window.
+  Capture and analyze macOS windows via screenshot + accessibility text.
   Two capture modes:
-  1. Hotkey (recommended) — user presses shortcut on target window, daemon captures, agent queries via list_appshots/get_appshot
-  2. Direct call — take_appshot captures current frontmost window
-  Use when user says "analyze this", "what's on my screen", "check this error", "look at latest screenshot", etc.
-version: 1.5.0
+  1. Hotkey (recommended) — user presses ⌃⌥⌘Space on target window, daemon captures silently, agent queries via API
+  2. Direct call — agent captures current frontmost window via API
+  Use when user says "look at my screen", "analyze this page", "what's on my screen", "check this screenshot", "capture this window", or pastes/sends a screenshot for analysis.
+version: 1.0.0
 platforms: [macos]
-metadata:
-  hermes:
-    tags: [screenshot, capture, appshot, desktop, macos, vision]
-    category: desktop
 ---
 
-# Appshot — Screenshot & Window Context
+# QClaw Appshot — Screenshot & Accessibility Text Capture
 
-## Core Concept: Hotkey vs Direct Call
-
-### Problem: Why does take_appshot capture Terminal?
-
-When you call `take_appshot` through Hermes, Hermes runs inside Terminal, so Terminal IS the "frontmost window". You'll capture Terminal instead of Chrome/Figma/IDE.
-
-### Solution: Hotkey First, Query Later
-
-```
-User action (in target window)      Hermes (in conversation)
-─────────────────────────────      ─────────────────────────
-1. Press ⌃⌥⌘Space on target app    (daemon captures silently)
-   ↳ Screenshot PNG auto-copied to clipboard
-2. Switch back to Hermes
-3. "Analyze latest screenshot"     → list_appshots(limit=1)
-                                   → get_appshot(id, include_image=true)
-                                   → Returns analysis
-```
-
-**Tip:** The hotkey also copies the screenshot PNG to your system clipboard. You can paste it (⌘V) directly into any chat window without needing `get_appshot(include_image=true)`.
-
-## Available Tools
-
-| Tool | Purpose | Key Parameters |
-|------|---------|---------------|
-| `take_appshot` | Capture current frontmost window | None (optional: pid) |
-| `list_appshots` | Browse capture history, get latest | app_name, date_from, date_to, limit, offset |
-| `get_appshot` | Full detail of one snapshot | snapshot_id (required), include_image, include_ax_tree, image_max_width |
-| `search_appshots` | Search by keyword | query (required), search_in |
-| `delete_appshot` | Delete a snapshot | snapshot_id (required) |
-
-## When to Use Each Tool
-
-### list_appshots + get_appshot (Most Common)
-
-Use when user says:
-- "Analyze my latest screenshot" / "What did I just capture?"
-- "Look at this page" (user already pressed hotkey on target app)
-- "Compare my last two screenshots"
-
-**Flow:**
-1. `list_appshots(limit=1)` → get latest snapshot ID
-2. Check `appName` matches what user describes
-3. `get_appshot(id, include_image=true)` → get text + image
-4. Analyze based on `full_text`; use `image_base64` for visual details
-
-### take_appshot (Specific Cases)
-
-Only when the target IS Hermes/Terminal itself:
-- User wants you to see terminal output
-- User pasted code and wants context of the full window
-
-### search_appshots
-
-- "Find my Figma screenshots from last week"
-- "Search captures containing 'error'"
-
-## get_appshot Token Budget
-
-| Mode | Tokens | When |
-|------|--------|------|
-| text-only (default) | ~2K | Most analysis tasks — reading text, extracting data |
-| image @500px | ~70K | Layout analysis, UI review |
-| image @800px | ~155K | Detailed visual inspection |
-| + AX tree | +40K | Debugging accessibility, spatial analysis |
-
-**Default:** `include_image=False`, `include_ax_tree=False`. Only request what you need.
-
-## Usage Patterns
-
-### Pattern 1: Hotkey → Query (Primary)
-
-```
-User presses hotkey on target → screenshot saved to daemon
-User says "analyze latest screenshot"
-→ list_appshots(limit=1)
-→ get_appshot(id, include_image=true)
-→ Analyze and respond
-```
-
-### Pattern 2: Cross-App Comparison
-
-```
-User captures Chrome, Figma, VS Code in sequence
-User says "compare my last 3 screenshots"
-→ list_appshots(limit=3)
-→ get_appshot for each as needed
-→ Compare and analyze
-```
-
-### Pattern 3: Text Extraction (No Image)
-
-```
-User captures a web page / document
-User says "extract all comments with authors"
-→ list_appshots(limit=1)
-→ get_appshot(id)  # text-only, no image needed
-→ Parse full_text and extract requested data
-```
-
-## Fallback
-
-If tools are unavailable (daemon not running, permissions missing), use:
-
-```bash
-# Screenshot only
-screencapture -w /tmp/window.png
-
-# Get frontmost app info
-osascript -e 'tell application "System Events" to get name of first process whose frontmost is true'
-```
-
-## Requirements
+## Prerequisites
 
 - macOS 14.0+
-- Capture daemon running on port 19876 (`curl http://127.0.0.1:19876/health`)
-- **Screen Recording + Accessibility permissions** (see Setup below)
-- **No Shortcuts.app needed** — hotkey (⌃⌥⌘Space) is built into the daemon
+- Daemon running on `http://127.0.0.1:19876`
+- Screen Recording + Accessibility permissions granted to QClawDaemon
+- Hotkey: ⌃⌥⌘Space (built into daemon, no Shortcuts.app needed)
 
-## First-Time Setup (CRITICAL)
+Verify daemon: `curl -s http://127.0.0.1:19876/health` → `{"status":"ok"}`
 
-When installing appshot for the first time, the user MUST grant two macOS permissions.
-**Guide the user through this step-by-step. Do not skip.**
+## How It Works
 
-### Step 1: Install the daemon
-```bash
-cd qclaw-appshot-share
-chmod +x install.sh && ./install.sh
+Captures frontmost window in two layers simultaneously:
+1. **Visual** — PNG screenshot (Retina 2x) via ScreenCaptureKit
+2. **Text** — Full accessibility tree via macOS Accessibility API
+
+Hotkey capture also copies screenshot PNG to system clipboard (⌘V to paste).
+
+## Capture Modes
+
+### Mode 1: Hotkey Capture (Recommended)
+
+Problem: Calling `take_appshot` from agent captures the terminal where the agent runs, not the user's target app.
+
+Solution: User presses hotkey on target app, then asks agent to retrieve.
+
+```
+User presses ⌃⌥⌘Space on target app → daemon captures silently
+User says "analyze latest screenshot" → list_appshots(limit=1) → get_appshot(id, ...)
 ```
 
-### Step 2: Grant Screen Recording permission
-1. System Settings → Privacy & Security → Screen Recording
-2. Click **+** → press ⌘⇧G → enter `~/.qclaw-appshot/bin/qclawd` → Add
-3. Toggle the switch ON (blue)
+### Mode 2: Direct API Capture
 
-### Step 3: Grant Accessibility permission
-1. System Settings → Privacy & Security → Accessibility
-2. Click **+** → press ⌘⇧G → enter `~/.qclaw-appshot/bin/qclawd` → Add
-3. Toggle the switch ON (blue)
-
-### Step 4: Restart the daemon
+Only when the target IS the terminal/agent itself:
 ```bash
-killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
+curl -X POST http://127.0.0.1:19876/capture
 ```
 
-### Step 5: Verify
+## API Reference (daemon at :19876)
+
+**CRITICAL: Only these exact endpoints exist. Do not guess or invent paths.**
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/health` | GET | Check daemon status |
+| `/capture` | POST | Take screenshot now |
+| `/snapshots` | GET | **List** all snapshots (use `?limit=1` for latest) |
+| `/snapshots/<id>` | GET | **Get detail** (metadata + fullText + axTree) |
+| `/screenshots/<id>` | GET | **Get image** (base64 PNG, use `?max_width=600`) |
+| `/snapshots/<id>` | DELETE | Delete snapshot |
+
+**Common mistakes to AVOID:**
+- ❌ `/appshots` — wrong path
+- ❌ `/list` — wrong path  
+- ❌ `/api/snapshots` — wrong path
+- ✅ `/snapshots?limit=1` — correct path for listing
+
+## Standard Workflow (ALWAYS follow this)
+
+When user says "analyze my screenshot", "look at this", or mentions a recent capture:
+
+**Step 1: List latest snapshot**
 ```bash
-curl http://127.0.0.1:19876/health
-# → {"status":"ok"}
+curl -s "http://127.0.0.1:19876/snapshots?limit=1"
+```
+Response: `{"items":[{"id":"...","appName":"...","windowTitle":"..."}]}`
+
+**Step 2: Get snapshot detail (text first)**
+```bash
+curl -s "http://127.0.0.1:19876/snapshots/ID_FROM_STEP_1"
+```
+Response contains: `metadata`, `fullText`, `axTree`
+
+**Step 3: Analyze `fullText`**
+If text is sufficient, analyze and respond.
+
+**Step 4 (only if needed): Get image for visual analysis**
+```bash
+curl -s "http://127.0.0.1:19876/screenshots/ID_FROM_STEP_1?max_width=600"
 ```
 
-**Test the hotkey**: Press ⌃⌥⌘Space on any window. You should see a screen flash.
+**DO NOT:**
+- Try multiple endpoint paths if one fails
+- Use `/appshots`, `/list`, or `/api/*` — these do not exist
+- Loop or retry the same failing curl command
+
+## Example: Analyze Latest Screenshot
+
+```bash
+# 1. Get latest snapshot ID
+SNAP=$(curl -s "http://127.0.0.1:19876/snapshots?limit=1" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['items'][0]['id'])")
+
+# 2. Get detail
+curl -s "http://127.0.0.1:19876/snapshots/$SNAP" | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+print('App:', data['metadata']['app']['name'])
+print('Window:', data['metadata']['app']['windowTitle'])
+print('Text:', data.get('fullText','')[:3000])
+"
+```
+
+### Get Screenshot Image
+
+```bash
+# Get base64 image (resized to 600px width for token efficiency)
+curl -s "http://127.0.0.1:19876/snapshots/$SNAP"  # for metadata
+curl -s "http://127.0.0.1:19876/screenshots/$SNAP?max_width=600" | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+print(data.get('imageBase64','')[:100] + '...')
+"
+```
+
+### Extract Text from Accessibility Tree
+
+When the snapshot's `fullText` is insufficient (e.g., table data, structured content), read the raw accessibility tree:
+
+```bash
+curl -s "http://127.0.0.1:19876/snapshots/$SNAP" | python3 -c "
+import json,sys
+data = json.load(sys.stdin)
+ax = data.get('axTree', {})
+# Extract all text nodes
+def extract(node, texts=[]):
+    val = node.get('value', '')
+    role = node.get('role', '')
+    if role == 'AXStaticText' and val:
+        texts.append(val)
+    elif role == 'AXLink' and node.get('description'):
+        texts.append(f'[LINK:{node[\"description\"]}]')
+    for child in node.get('children', []):
+        extract(child, texts)
+    return texts
+for t in extract(ax):
+    if len(t) > 2: print(t)
+"
+```
+
+### Read Snapshot Files Directly
+
+Snapshots are saved locally. Find them via metadata or list:
+```bash
+# List directories by date
+ls /Users/jane/snapshots/
+
+# Each snapshot directory contains:
+#   metadata.json, screenshot.png, accessibility_tree.json
+```
+
+## Token Budget Guide
+
+| Mode | Approx Tokens | When to Use |
+|------|--------------|-------------|
+| text-only (fullText) | ~2K | Reading page content, extracting data |
+| image @500px | ~70K | UI layout review |
+| image @800px | ~155K | Detailed visual inspection |
+| full AX tree | ~40K+ | Debugging accessibility, spatial analysis |
+
+Default: text-only. Only request image/AX tree when truly needed.
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
+| Problem | Cause | Fix |
 |---------|-------|-----|
-| AX tree empty (text_length=0) | Accessibility permission missing for `~/.qclaw-appshot/bin/qclawd` | Re-check Step 3 above |
-| Capture timeout / no screenshot | Screen Recording permission missing | Re-check Step 2 above |
-| "Address already in use" | Old daemon still running | `killall qclawd` then restart |
-| Hotkey not working | Accessibility permission missing | Re-check Step 3 above |
+| Daemon unreachable | Not running or port blocked | `curl http://127.0.0.1:19876/health`; `lsof -i :19876`; `killall qclawd; ~/.qclaw-appshot/bin/qclawd &` |
+| Empty capture / timeout | Screen Recording permission missing | System Settings → Privacy → Screen Recording → add `~/.qclaw-appshot/bin/qclawd` |
+| Hotkey not working | Accessibility permission missing | System Settings → Privacy → Accessibility → add `~/.qclaw-appshot/bin/qclawd` |
+| **AX tree empty (text=0)** | **#1 cause: Accessibility permission not granted to daemon binary** | **Re-check System Settings → Privacy → Accessibility. The binary path must be `~/.qclaw-appshot/bin/qclawd`.** |
+| API returns 404 | Wrong endpoint path | Use `/snapshots`, not `/appshots` or `/list` |
+| Web page text missing | Chrome/Web AX limitation | Normal. Web content is not exposed to macOS Accessibility API. Use screenshot image instead. |
+| Stuck in retry loop | Trying non-existent endpoints | Stop. Verify daemon with `/health`. Then use `/snapshots?limit=1` exactly. |
