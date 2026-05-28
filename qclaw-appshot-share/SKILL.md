@@ -132,5 +132,48 @@ osascript -e 'tell application "System Events" to get name of first process whos
 
 - macOS 14.0+
 - Capture daemon running on port 19876 (`curl http://127.0.0.1:19876/health`)
-- Screen Recording + Accessibility permissions for QClawDaemon
+- **Screen Recording + Accessibility permissions** (see Setup below)
 - **No Shortcuts.app needed** — hotkey (⌃⌥⌘Space) is built into the daemon
+
+## First-Time Setup (CRITICAL)
+
+When installing appshot for the first time, the user MUST grant two macOS permissions.
+**Guide the user through this step-by-step. Do not skip.**
+
+### Step 1: Install the daemon
+```bash
+cd qclaw-appshot-share
+chmod +x install.sh && ./install.sh
+```
+
+### Step 2: Grant Screen Recording permission
+1. System Settings → Privacy & Security → Screen Recording
+2. Click **+** → press ⌘⇧G → enter `~/.qclaw-appshot/bin/qclawd` → Add
+3. Toggle the switch ON (blue)
+
+### Step 3: Grant Accessibility permission
+1. System Settings → Privacy & Security → Accessibility
+2. Click **+** → press ⌘⇧G → enter `~/.qclaw-appshot/bin/qclawd` → Add
+3. Toggle the switch ON (blue)
+
+### Step 4: Restart the daemon
+```bash
+killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
+```
+
+### Step 5: Verify
+```bash
+curl http://127.0.0.1:19876/health
+# → {"status":"ok"}
+```
+
+**Test the hotkey**: Press ⌃⌥⌘Space on any window. You should see a screen flash.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| AX tree empty (text_length=0) | Accessibility permission missing for `~/.qclaw-appshot/bin/qclawd` | Re-check Step 3 above |
+| Capture timeout / no screenshot | Screen Recording permission missing | Re-check Step 2 above |
+| "Address already in use" | Old daemon still running | `killall qclawd` then restart |
+| Hotkey not working | Accessibility permission missing | Re-check Step 3 above |

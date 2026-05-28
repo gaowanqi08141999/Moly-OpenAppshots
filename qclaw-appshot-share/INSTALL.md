@@ -23,18 +23,24 @@ swift build
 
 The daemon listens on `http://127.0.0.1:19876`.
 
-## Step 2: Grant macOS Permissions
+## Step 2: Grant macOS Permissions (MANDATORY)
 
-**Screen Recording:**
-- System Settings → Privacy & Security → Screen Recording
-- Enable the terminal app that runs the daemon
-- (Or enable QClawDaemon if it appears)
+macOS requires manual authorization for two permissions. The daemon will NOT work without them.
 
-**Accessibility:**
-- System Settings → Privacy & Security → Accessibility
-- Enable the terminal app that runs the daemon
+**Screen Recording** (needed for screenshot capture):
+1. System Settings → Privacy & Security → Screen Recording
+2. Click **+** → press **⌘⇧G** → enter `~/.qclaw-appshot/bin/qclawd` → Open
+3. Toggle the switch **ON** (blue)
 
-Restart the daemon after granting permissions.
+**Accessibility** (needed for text extraction + hotkey):
+1. System Settings → Privacy & Security → Accessibility
+2. Click **+** → press **⌘⇧G** → enter `~/.qclaw-appshot/bin/qclawd` → Open
+3. Toggle the switch **ON** (blue)
+
+**Restart the daemon after granting permissions:**
+```bash
+killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
+```
 
 ## Step 3: Install the Hermes Plugin
 
@@ -91,10 +97,11 @@ In Hermes, say: "Take an appshot" or press the hotkey, then:
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
-| Daemon won't start | Check port 19876 isn't in use: `lsof -i :19876` |
-| Capture returns empty | Check Screen Recording & Accessibility permissions |
-| Hotkey not working | Check Accessibility permission for QClawDaemon; restart daemon |
-| Tools not appearing | Check appshot.py is in `~/.hermes/tools/`, restart Hermes |
-| AX tree is empty | The app may not support Accessibility API |
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| Daemon won't start | Port 19876 in use | `lsof -i :19876` then `killall qclawd` |
+| Capture returns empty / timeout | Screen Recording permission missing | Re-do Step 2 (Screen Recording) |
+| Hotkey not working | Accessibility permission missing | Re-do Step 2 (Accessibility) |
+| **AX tree empty (text_length=0)** | **Accessibility permission not granted to `~/.qclaw-appshot/bin/qclawd`** | **Re-do Step 2 (Accessibility). This is the #1 cause.** |
+| Tools not appearing in Hermes | appshot.py not in correct path | `cp appshot.py ~/.hermes/hermes-agent/tools/` |
+| Web page text missing | Chrome AX Tree limitation | Normal — Web content is not exposed to macOS Accessibility API. Use screenshot image for visual analysis instead. |

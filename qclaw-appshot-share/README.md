@@ -15,14 +15,19 @@ Everything runs locally — no cloud uploads, no API keys.
 ## Quick Start
 
 ```bash
-# One-line install
+# 1. Install
 chmod +x install.sh && ./install.sh
 
-# Then grant permissions when prompted:
-#   System Settings → Privacy & Security → Screen Recording → Enable QClawDaemon
-#   System Settings → Privacy & Security → Accessibility → Enable QClawDaemon
+# 2. Grant permissions (MANDATORY — macOS will not prompt automatically)
+#    System Settings → Privacy & Security → Screen Recording
+#      → + → ⌘⇧G → ~/.qclaw-appshot/bin/qclawd → toggle ON
+#    System Settings → Privacy & Security → Accessibility
+#      → + → ⌘⇧G → ~/.qclaw-appshot/bin/qclawd → toggle ON
 
-# Press ⌃⌥⌘Space to capture any window. Screenshot auto-copied to clipboard.
+# 3. Restart daemon
+killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
+
+# 4. Press ⌃⌥⌘Space to capture any window. Screenshot auto-copied to clipboard.
 ```
 
 Or manually:
