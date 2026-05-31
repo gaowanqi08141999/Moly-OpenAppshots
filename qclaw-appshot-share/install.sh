@@ -99,6 +99,9 @@ fi
 if [[ -f "${SCRIPT_DIR}/QClaw.png" ]]; then
     cp "${SCRIPT_DIR}/QClaw.png" "$INSTALL_DIR/QClaw.png"
 fi
+if [[ -f "${SCRIPT_DIR}/qclaw_path.py" ]]; then
+    cp "${SCRIPT_DIR}/qclaw_path.py" "$INSTALL_DIR/qclaw_path.py"
+fi
 
 # ── Install MCP server (unified tool layer for ALL agents) ──
 print_step "Installing MCP server..."

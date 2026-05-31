@@ -20,58 +20,38 @@ platforms: [macos]
 
 ## ⚡ FAST PATH (Zero API Calls — USE THIS FIRST)
 
-**If the user provides a file path** (e.g. `/Users/jane/snapshots/.../screenshot.png`),
-**DO NOT call MCP tools.** Instead, read the sibling files directly:
+Every screenshot PNG contains embedded metadata (`qclaw_path`) pointing to the local
+snapshot directory. Use the `qclaw_path.py` utility to extract it:
+
+### Pattern A: User provides a file path
+
+If the user gives a path like `~/snapshots/.../screenshot.png`:
 
 ```bash
-# Step 1: Extract the snapshot directory from the path
+# Read sibling files directly — no API calls needed
 SNAP_DIR=$(dirname /path/to/screenshot.png)
-
-# Step 2: Read metadata instantly (no API)
-cat "$SNAP_DIR/metadata.json" 2>/dev/null
-
-# Step 3: Read full text instantly (no API)
-cat "$SNAP_DIR/accessibility_tree.json" 2>/dev/null
+cat "$SNAP_DIR/metadata.json"      # instant
+cat "$SNAP_DIR/accessibility_tree.json"  # instant
 ```
 
-This gives you everything you need in milliseconds. MCP is only needed when the user
-says "analyze the latest screenshot" and you don't have a file path yet.
+### Pattern B: User pastes a PNG image
 
-**If the user pastes a PNG image** into chat, parse the PNG metadata FIRST:
+If the user pastes an image (PNG in clipboard), save it first, then extract:
 
 ```bash
-# Extract the snapshot directory path from pasted image metadata
-python3 -c "
-import sys, struct
-# Read PNG from file or stdin, find tEXt chunk with 'qclaw_path'
-with open('/tmp/pasted.png', 'rb') as f:
-    data = f.read()
-pos = 8  # skip PNG signature
-while pos < len(data) - 12:
-    length = struct.unpack('>I', data[pos:pos+4])[0]
-    chunk_type = data[pos+4:pos+8].decode('ascii','ignore')
-    if chunk_type == 'tEXt':
-        chunk_data = data[pos+8:pos+8+length]
-        parts = chunk_data.split(b'\x00', 1)
-        if parts[0] == b'qclaw_path':
-            snap_dir = parts[1].decode('utf-8')
-            print(snap_dir)
-            break
-    elif chunk_type == 'IEND':
-        break
-    pos += 12 + length
-"
+# 1. Save pasted image (path depends on how your agent receives attachments)
+# 2. Extract the snapshot directory from PNG metadata
+SNAP_DIR=$(python3 ~/.qclaw-appshot/qclaw_path.py /path/to/pasted.png)
+
+# 3. If SNAP_DIR is not empty, read local files directly
+if [ -n "$SNAP_DIR" ]; then
+    cat "$SNAP_DIR/metadata.json"
+    cat "$SNAP_DIR/accessibility_tree.json"
+fi
 ```
 
-If a `qclaw_path` is found (e.g. `/Users/jane/snapshots/2026-05-28/ID`), read files DIRECTLY:
-
-```bash
-# Read metadata (instant local read, no API)
-cat SNAP_DIR/metadata.json
-
-# Read full text (instant local read, no API)
-cat SNAP_DIR/accessibility_tree.json
-```
+The `qclaw_path.py` script returns the snapshot directory path, or empty string if not found.
+This eliminates ALL MCP/HTTP round-trips — reading local files takes milliseconds.
 
 **This eliminates ALL MCP/HTTP round-trips.** Only use the daemon API (MCP tools) when the fast path is unavailable.
 
