@@ -116,6 +116,14 @@ final class IPCServer {
             let body = #"{"status":"ok"}"#
             return (200, "application/json", body)
 
+        case ("GET", "axdiag"):
+            let diag = engine.axDiagnostic()
+            if let data = try? JSONSerialization.data(withJSONObject: diag, options: []),
+               let json = String(data: data, encoding: .utf8) {
+                return (200, "application/json", json)
+            }
+            return (500, "application/json", #"{"error":"encode failed"}"#)
+
         case ("POST", "capture"):
             return handleCapture(query: query)
 

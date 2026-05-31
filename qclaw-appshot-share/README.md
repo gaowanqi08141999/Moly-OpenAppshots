@@ -28,8 +28,11 @@ chmod +x install.sh && ./install.sh
 # 3. Restart daemon
 killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
 
-# 4. Configure your agent's MCP (see MCP_SETUP.md)
-# 5. Press ⌃⌥⌘Space to capture any window
+# 4. Verify everything works
+cd capture-daemon && make doctor
+
+# 5. Configure your agent's MCP (see MCP_SETUP.md)
+# 6. Press ⌃⌥⌘Space to capture any window
 ```
 
 Or manually:

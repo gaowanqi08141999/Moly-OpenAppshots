@@ -138,6 +138,37 @@ final class CaptureEngine: @unchecked Sendable {
 
     // MARK: - Accessibility API (Text Layer)
 
+    /// Diagnostic: check AX permission status for this process.
+    func axDiagnostic() -> [String: Any] {
+        let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(opts)
+        let binPath = Bundle.main.executablePath ?? "unknown"
+
+        // Try a basic AX call
+        let testPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+        var axTest = "not tested"
+        if testPID > 0 {
+            let app = AXUIElementCreateApplication(testPID)
+            if let window = app.attribute(kAXFocusedWindowAttribute) {
+                let windowElem = window as! AXUIElement
+                if let children = windowElem.attribute(kAXChildrenAttribute) as? [AXUIElement] {
+                    axTest = "OK: \(children.count) children in focused window"
+                } else {
+                    axTest = "window found but no children array"
+                }
+            } else {
+                axTest = "no focused window (kAXFocusedWindowAttribute returned nil)"
+            }
+        }
+
+        return [
+            "ax_trusted": trusted,
+            "binary_path": binPath,
+            "target_pid": testPID,
+            "ax_test": axTest
+        ]
+    }
+
     private func extractAXTree(pid: pid_t) throws -> AXNode {
         let app = AXUIElementCreateApplication(pid)
 
