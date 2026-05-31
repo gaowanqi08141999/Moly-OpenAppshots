@@ -6,7 +6,8 @@
 
 1. **截图即复制** — 按热键截图后，PNG **自动复制到系统剪贴板**。直接 ⌘V 粘贴到任何对话框。
 2. **内置热键** — daemon 原生监听 ⌃⌥⌘Space，**不需要 Shortcuts.app 配置**。
-3. **一键安装** — `chmod +x install.sh && ./install.sh` 搞定一切。
+3. **统一 MCP** — 所有 AI 智能体（Hermes、OpenClaw、Claude Desktop、Cursor、QClaw）都用同一个 MCP server 接入。
+4. **一键安装** — `chmod +x install.sh && ./install.sh` 搞定一切。
 
 ## 你需要给你的朋友
 

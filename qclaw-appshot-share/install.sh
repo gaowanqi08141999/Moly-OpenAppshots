@@ -7,7 +7,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DAEMON_BIN="${SCRIPT_DIR}/QClawDaemon"
 INSTALL_DIR="$HOME/.qclaw-appshot"
-HERMES_TOOLS_DIR="$HOME/.hermes/hermes-agent/tools"
 HERMES_SKILLS_DIR="$HOME/.hermes/skills/appshot"
 
 # Colors
@@ -101,14 +100,35 @@ if [[ -f "${SCRIPT_DIR}/QClaw.png" ]]; then
     cp "${SCRIPT_DIR}/QClaw.png" "$INSTALL_DIR/QClaw.png"
 fi
 
-# ── Install Hermes plugin ──
-print_step "Installing Hermes plugin..."
+# ── Install MCP server (unified tool layer for ALL agents) ──
+print_step "Installing MCP server..."
 
-mkdir -p "$HERMES_TOOLS_DIR"
+if [[ -f "${SCRIPT_DIR}/appshot_mcp.py" ]]; then
+    cp "${SCRIPT_DIR}/appshot_mcp.py" "$INSTALL_DIR/appshot_mcp.py"
+fi
+
+# ── Install skill files ──
+print_step "Installing skill files..."
+
 mkdir -p "$HERMES_SKILLS_DIR"
-
-cp "${SCRIPT_DIR}/appshot.py" "$HERMES_TOOLS_DIR/"
 cp "${SCRIPT_DIR}/SKILL.md" "$HERMES_SKILLS_DIR/"
+
+# Also copy to QClaw skills dir if it exists
+QCLAW_SKILLS_DIR="$HOME/.qclaw/skills/qclaw-appshot"
+if [[ -d "$HOME/.qclaw/skills" ]]; then
+    mkdir -p "$QCLAW_SKILLS_DIR"
+    cp "${SCRIPT_DIR}/SKILL.md" "$QCLAW_SKILLS_DIR/"
+fi
+
+# ── Configure Hermes MCP (if Hermes is installed) ──
+if [[ -f "$HOME/.hermes/config.yaml" ]]; then
+    print_step "Configuring Hermes MCP..."
+    if ! grep -q "qclaw-appshot" "$HOME/.hermes/config.yaml" 2>/dev/null; then
+        print_warn "Please run: hermes mcp add qclaw-appshot -- python3 $INSTALL_DIR/appshot_mcp.py"
+    else
+        print_step "Hermes MCP already configured."
+    fi
+fi
 
 # ── Create LaunchAgent (auto-start on login) ──
 print_step "Setting up auto-start..."

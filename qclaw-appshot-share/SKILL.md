@@ -2,16 +2,21 @@
 name: qclaw-appshot
 description: |
   Capture and analyze macOS windows via screenshot + accessibility text.
+  All agents (Hermes, OpenClaw, Claude Desktop, Cursor, QClaw) use the same MCP server (appshot_mcp.py).
+  Tools available via MCP: take_appshot, list_appshots, get_appshot, get_appshot_image, search_appshots, delete_appshot.
   Two capture modes:
   1. Hotkey (recommended) — user presses ⌃⌥⌘Space on target window, daemon captures silently, agent queries via API
   2. Direct call — agent captures current frontmost window via API
   Use when user says "look at my screen", "analyze this page", "what's on my screen", "check this screenshot", "capture this window", or pastes/sends a screenshot for analysis.
   注意，就算用户直接上传了图片，你也要通过appshot来获取最新截图对应的全量信息，然后再进行分析。不要直接通过ocr等方式直接分析用户通过对话发给你的图片。
-version: 1.0.0
+version: 2.0.0
 platforms: [macos]
 ---
 
 # QClaw Appshot — Screenshot & Accessibility Text Capture
+
+> **Unified MCP**: All agents now use the same MCP server. No separate tool registrations needed.
+> If your MCP tools are not loaded, check `MCP_SETUP.md` for agent-specific configuration.
 
 ## Prerequisites
 
