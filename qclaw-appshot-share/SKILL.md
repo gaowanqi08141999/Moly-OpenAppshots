@@ -15,8 +15,48 @@ platforms: [macos]
 
 # QClaw Appshot — Screenshot & Accessibility Text Capture
 
-> **Unified MCP**: All agents now use the same MCP server. No separate tool registrations needed.
+> **Unified MCP**: All agents use the same MCP server. No separate registrations needed.
 > If your MCP tools are not loaded, check `MCP_SETUP.md` for agent-specific configuration.
+
+## ⚡ FAST PATH (Zero API Calls)
+
+When a user pastes a screenshot into chat, check the PNG metadata FIRST before making any API calls:
+
+```bash
+# Extract the snapshot directory path from pasted image metadata
+python3 -c "
+import sys, struct
+# Read PNG from file or stdin, find tEXt chunk with 'qclaw_path'
+with open('/tmp/pasted.png', 'rb') as f:
+    data = f.read()
+pos = 8  # skip PNG signature
+while pos < len(data) - 12:
+    length = struct.unpack('>I', data[pos:pos+4])[0]
+    chunk_type = data[pos+4:pos+8].decode('ascii','ignore')
+    if chunk_type == 'tEXt':
+        chunk_data = data[pos+8:pos+8+length]
+        parts = chunk_data.split(b'\x00', 1)
+        if parts[0] == b'qclaw_path':
+            snap_dir = parts[1].decode('utf-8')
+            print(snap_dir)
+            break
+    elif chunk_type == 'IEND':
+        break
+    pos += 12 + length
+"
+```
+
+If a `qclaw_path` is found (e.g. `/Users/jane/snapshots/2026-05-28/ID`), read files DIRECTLY:
+
+```bash
+# Read metadata (instant local read, no API)
+cat SNAP_DIR/metadata.json
+
+# Read full text (instant local read, no API)
+cat SNAP_DIR/accessibility_tree.json
+```
+
+**This eliminates ALL MCP/HTTP round-trips.** Only use the daemon API (MCP tools) when the fast path is unavailable.
 
 ## Prerequisites
 
@@ -35,7 +75,7 @@ Captures frontmost window in two layers simultaneously:
 1. **Visual** — PNG screenshot (Retina 2x) via ScreenCaptureKit
 2. **Text** — Full accessibility tree via macOS Accessibility API
 
-Hotkey capture also copies screenshot PNG to system clipboard (⌘V to paste).
+Hotkey capture also copies screenshot PNG to system clipboard (⌘V to paste).**The PNG contains embedded metadata (`qclaw_path`) pointing to the local snapshot directory.**
 
 ## Capture Modes
 
