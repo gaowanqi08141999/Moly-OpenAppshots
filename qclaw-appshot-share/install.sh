@@ -85,7 +85,7 @@ fi
 # Add to PATH if not already
 if ! grep -q "$INSTALL_DIR/bin" "$HOME/.zshrc" 2>/dev/null; then
     echo "export PATH=\"$INSTALL_DIR/bin:\$PATH\"" >> "$HOME/.zshrc"
-    print_step "Added ~/.qclaw/bin to PATH (restart terminal to use 'qclawd' directly)"
+    print_step "Added ~/.qclaw-appshot/bin to PATH (restart terminal to use 'qclawd' directly)"
 fi
 
 # ── Install notification assets ──
@@ -164,14 +164,14 @@ echo "You MUST grant these permissions (one-time setup):"
 echo ""
 echo "1. Screen Recording:"
 echo "   System Settings → Privacy & Security → Screen Recording"
-echo "   → Enable 'QClawDaemon' (or Terminal if it appears)"
+echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/qclawd → Open → Toggle ON"
 echo ""
 echo "2. Accessibility:"
 echo "   System Settings → Privacy & Security → Accessibility"
-echo "   → Enable 'QClawDaemon' (or Terminal if it appears)"
+echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/qclawd → Open → Toggle ON"
 echo ""
 echo "3. Restart the daemon after granting permissions:"
-echo "   killall qclawd; qclawd &"
+echo "   killall qclawd; ${INSTALL_DIR}/bin/qclawd &"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${GREEN}Hotkey is ready!${NC}"

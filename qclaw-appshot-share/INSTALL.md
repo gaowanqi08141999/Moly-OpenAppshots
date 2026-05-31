@@ -11,23 +11,27 @@ This guide is designed to be followed by either a human or an AI agent (Hermes/C
 ## Step 1: Build & Install the Daemon
 
 ```bash
-# Clone or copy the capture-daemon repository
+# Option A: One-step install (recommended)
 cd /path/to/capture-daemon
+make install          # builds + copies to ~/.qclaw-appshot/bin/qclawd
 
-# Build (Swift Package Manager)
+# Option B: Manual build + copy
+cd /path/to/capture-daemon
 swift build
-
-# Copy to install.sh default path (permissions stick to this path — do NOT run directly from .build/debug/)
 mkdir -p ~/.qclaw-appshot/bin
 cp .build/debug/QClawDaemon ~/.qclaw-appshot/bin/qclawd
+```
 
-# Run in background (always use this path)
-nohup ~/bin/qclawd > /dev/null 2>&1 &
+Start the daemon (always use this path):
+```bash
+nohup ~/.qclaw-appshot/bin/qclawd > /dev/null 2>&1 &
 ```
 
 The daemon listens on `http://127.0.0.1:19876`.
 
-> ⚠️ **CRITICAL**: Always use `~/bin/qclawd`. macOS authorizes permissions by binary path. If you run `.build/debug/QClawDaemon` directly, permissions will not apply and AX tree will be empty.
+> ⚠️ **CRITICAL**: Always use `~/.qclaw-appshot/bin/qclawd`. macOS authorizes permissions by binary path. If you run `.build/debug/QClawDaemon` directly, permissions will not apply and AX tree will be empty.
+>
+> The daemon has a **path guard**: if started from the wrong path, it prints a bold warning box telling you exactly how to fix it.
 
 ## Step 2: Grant macOS Permissions (MANDATORY)
 

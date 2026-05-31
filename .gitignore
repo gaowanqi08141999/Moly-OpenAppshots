@@ -23,6 +23,9 @@
 __pycache__/
 *.pyc
 
+# Workbuddy persistence (separate system)
+.workbuddy/
+
 # Capture daemon SQLite databases
 *.db
 *.db-journal

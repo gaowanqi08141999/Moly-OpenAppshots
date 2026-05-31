@@ -38,9 +38,9 @@ chmod +x install.sh
 ```
 
 脚本自动完成：
-1. 复制预编译 daemon → `~/.qclaw/bin/qclawd`
-2. 复制通知资源 → `~/.qclaw/`
-3. 复制 `appshot.py` → `~/.hermes/tools/`
+1. 复制预编译 daemon → `~/.qclaw-appshot/bin/qclawd`
+2. 复制通知资源 → `~/.qclaw-appshot/`
+3. 复制 `appshot.py` → `~/.hermes/hermes-agent/tools/`
 4. 复制 skill → `~/.hermes/skills/appshot/`
 5. 创建 LaunchAgent → daemon 开机自启
 
