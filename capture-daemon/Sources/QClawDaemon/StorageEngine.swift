@@ -63,8 +63,9 @@ final class StorageEngine {
 
         try FileManager.default.createDirectory(at: snapDir, withIntermediateDirectories: true)
 
-        // Write files
-        try result.pngData.write(to: snapDir.appendingPathComponent("screenshot.png"))
+        // Write files — embed snapshot dir path in PNG metadata for fast agent access
+        let pngWithMeta = embedSnapshotPath(in: result.pngData, path: snapDir.path)
+        try pngWithMeta.write(to: snapDir.appendingPathComponent("screenshot.png"))
 
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -266,6 +267,63 @@ final class StorageEngine {
         }
     }
 }
+
+// ── PNG metadata embedding ──
+
+/// Embed a tEXt chunk (qclaw_path=<dir>) into PNG data before the IEND chunk.
+/// Lets agents extract the local snapshot directory from any pasted image.
+func embedSnapshotPath(in pngData: Data, path: String) -> Data {
+    var data = pngData
+
+    let keyword = "qclaw_path"
+    let text = path
+
+    // Build tEXt chunk data: keyword + null + text
+    var chunkData = Data()
+    chunkData.append(contentsOf: keyword.utf8)
+    chunkData.append(0)
+    chunkData.append(contentsOf: text.utf8)
+
+    // Build full chunk: 4-byte length + "tEXt" + data + 4-byte CRC32
+    var chunk = Data()
+    var length = UInt32(chunkData.count).bigEndian
+    chunk.append(Data(bytes: &length, count: 4))
+    chunk.append(contentsOf: "tEXt".utf8)
+    chunk.append(chunkData)
+
+    var crcData = Data("tEXt".utf8)
+    crcData.append(chunkData)
+    var crc = crc32png(crcData).bigEndian
+    chunk.append(Data(bytes: &crc, count: 4))
+
+    // Insert before IEND (last 12 bytes)
+    guard data.count >= 12 else { return data }
+    let iendOffset = data.count - 12
+    data.insert(contentsOf: chunk, at: iendOffset)
+
+    return data
+}
+
+private func crc32png(_ data: Data) -> UInt32 {
+    var crc: UInt32 = 0xFFFFFFFF
+    for byte in data {
+        let i = Int((crc ^ UInt32(byte)) & 0xFF)
+        crc = (crc >> 8) ^ crc32pngTable[i]
+    }
+    return crc ^ 0xFFFFFFFF
+}
+
+private let crc32pngTable: [UInt32] = {
+    var table = [UInt32](repeating: 0, count: 256)
+    for i in 0..<256 {
+        var c = UInt32(i)
+        for _ in 0..<8 {
+            c = (c & 1) != 0 ? (0xEDB88320 ^ (c >> 1)) : (c >> 1)
+        }
+        table[i] = c
+    }
+    return table
+}()
 
 enum StorageError: Error, LocalizedError {
     case sqliteError(String)

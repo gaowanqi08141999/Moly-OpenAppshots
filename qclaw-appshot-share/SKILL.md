@@ -18,9 +18,26 @@ platforms: [macos]
 > **Unified MCP**: All agents use the same MCP server. No separate registrations needed.
 > If your MCP tools are not loaded, check `MCP_SETUP.md` for agent-specific configuration.
 
-## ⚡ FAST PATH (Zero API Calls)
+## ⚡ FAST PATH (Zero API Calls — USE THIS FIRST)
 
-When a user pastes a screenshot into chat, check the PNG metadata FIRST before making any API calls:
+**If the user provides a file path** (e.g. `/Users/jane/snapshots/.../screenshot.png`),
+**DO NOT call MCP tools.** Instead, read the sibling files directly:
+
+```bash
+# Step 1: Extract the snapshot directory from the path
+SNAP_DIR=$(dirname /path/to/screenshot.png)
+
+# Step 2: Read metadata instantly (no API)
+cat "$SNAP_DIR/metadata.json" 2>/dev/null
+
+# Step 3: Read full text instantly (no API)
+cat "$SNAP_DIR/accessibility_tree.json" 2>/dev/null
+```
+
+This gives you everything you need in milliseconds. MCP is only needed when the user
+says "analyze the latest screenshot" and you don't have a file path yet.
+
+**If the user pastes a PNG image** into chat, parse the PNG metadata FIRST:
 
 ```bash
 # Extract the snapshot directory path from pasted image metadata
