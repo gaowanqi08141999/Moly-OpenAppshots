@@ -95,21 +95,23 @@ final class HotkeyListener: @unchecked Sendable {
     private func performCapture() async {
         do {
             // 1. Get the REAL frontmost app's PID via AppleScript
-            // (NSWorkspace.frontmostApplication can return the daemon itself)
             let pid = try await getFrontmostPID()
 
-            // 2. Capture that specific app
+            // 2. Get app name early (fast) so we can show notification immediately
+            let appName = NSRunningApplication(processIdentifier: pid)?.localizedName ?? ""
+
+            // 3. Show notification NOW — in parallel with capture (saves ~1s perceived latency)
+            showNotification(appName: appName)
+
+            // 4. Capture that specific app
             let result = try await engine.captureApp(pid: pid)
             let summary = try storage.save(result)
 
             print("[Hotkey] ✅  Captured: \(summary.appName) — \(summary.windowTitle)")
 
-            // 3. Copy screenshot PNG to clipboard
+            // 5. Copy screenshot PNG to clipboard
             let pngPath = summary.dirPath + "/screenshot.png"
             copyPNGToClipboard(path: pngPath)
-
-            // 4. Show notification overlay
-            showNotification(appName: summary.appName)
 
         } catch {
             print("[Hotkey] ❌  Capture failed: \(error)")

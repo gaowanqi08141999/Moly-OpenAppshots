@@ -1,5 +1,5 @@
 #!/usr/bin/env osascript -l JavaScript
-// AppshotNotify - Apple-style overlay notification via JXA
+// Moly Notify - Apple-style overlay notification via JXA
 // Usage: osascript -l JavaScript notify.js "App Name" "/path/to/icon.png"
 ObjC.import('Cocoa');
 
@@ -21,7 +21,9 @@ for (var i = 2; i < args.count; i++) {
 var app = $.NSApplication.sharedApplication;
 app.setActivationPolicy($.NSApplicationActivationPolicyAccessory);
 
-var PW = 300, PH = 64, M = 20, R = 20;
+// 1.5x scale: 450×96 panel, 30px margin
+var PW = 450, PH = 96, M = 30, R = 20;
+var fontSize = 18, subFontSize = 14, iconSize = 42;
 
 var panel = $.NSPanel.alloc.initWithContentRectStyleMaskBackingDefer(
     $.NSMakeRect(0, 0, PW, PH),
@@ -42,9 +44,9 @@ bg.layer.cornerRadius = R;
 bg.layer.masksToBounds = true;
 panel.contentView.addSubview(bg);
 
-// Icon: try custom PNG via NSData, fallback to SF Symbol
-var iconSize = 28, iconY = (PH - iconSize) / 2;
-var iv = $.NSImageView.alloc.initWithFrame($.NSMakeRect(16, iconY, iconSize, iconSize));
+// Icon
+var iconY = (PH - iconSize) / 2;
+var iv = $.NSImageView.alloc.initWithFrame($.NSMakeRect(20, iconY, iconSize, iconSize));
 iv.imageScaling = $.NSImageScaleProportionallyUpOrDown;
 
 var customIcon = null;
@@ -54,13 +56,10 @@ if (iconPath.length > 0) {
         customIcon = $.NSImage.alloc.initWithData(iconData);
     }
 }
-
-// Validate customIcon has actual image data
 var iconValid = false;
 if (customIcon) {
     try { iconValid = (customIcon.size && customIcon.size.width > 0); } catch(e) {}
 }
-
 if (iconValid) {
     iv.image = customIcon;
 } else {
@@ -76,20 +75,22 @@ bg.addSubview(iv);
 
 // Title
 var showSub = subtitle.length > 0;
-var ty = showSub ? 36 : (PH - 18) / 2;
-var tl = $.NSTextField.alloc.initWithFrame($.NSMakeRect(56, ty, PW - 72, 18));
+var textX = 76;
+var textW = PW - textX - 20;
+var ty = showSub ? PH - 42 : (PH - fontSize - 4) / 2;
+var tl = $.NSTextField.alloc.initWithFrame($.NSMakeRect(textX, ty, textW, fontSize + 4));
 tl.stringValue = $("截图已保存");
-tl.font = $.NSFont.systemFontOfSizeWeight(14, 0.38);
+tl.font = $.NSFont.systemFontOfSizeWeight(fontSize, 0.38);
 tl.textColor = $.NSColor.labelColor;
 tl.bezeled = false; tl.drawsBackground = false; tl.editable = false; tl.selectable = false;
 bg.addSubview(tl);
 
 if (showSub) {
-    var sl = $.NSTextField.alloc.initWithFrame($.NSMakeRect(56, 14, PW - 72, 16));
+    var sl = $.NSTextField.alloc.initWithFrame($.NSMakeRect(textX, 18, textW, subFontSize + 4));
     sl.stringValue = $(subtitle);
-    sl.font = $.NSFont.systemFontOfSizeWeight(12, 0.0);
+    sl.font = $.NSFont.systemFontOfSizeWeight(subFontSize, 0.0);
     sl.textColor = $.NSColor.secondaryLabelColor;
-    sl.bezeled = false; sl.drawsBackground = false; sl.editable = false; sl.selectable = false;
+    sl.bezeled = false; sl.drawsBackground = false; tl.editable = false; tl.selectable = false;
     sl.lineBreakMode = $.NSLineBreakByTruncatingTail;
     bg.addSubview(sl);
 }
@@ -98,22 +99,21 @@ if (showSub) {
 var sf = $.NSScreen.mainScreen.visibleFrame;
 panel.setFrameOrigin($.NSMakePoint(sf.origin.x + sf.size.width - PW - M, sf.origin.y + sf.size.height - PH - M));
 
-// Fade in
-panel.alphaValue = 0;
+// Show instantly (no animator delay — faster)
 panel.orderFront($());
-panel.animator.alphaValue = 1.0;
+panel.alphaValue = 1.0;
 
-// Wait 2.5s
+// Display duration
 var start = $.NSDate.date;
-while (($.NSDate.date.timeIntervalSinceDate(start)) < 2.5) {
-    $.NSRunLoop.mainRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
+while (($.NSDate.date.timeIntervalSinceDate(start)) < 2.0) {
+    $.NSRunLoop.mainRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05));
 }
 
-// Fade out
+// Quick fade out
 panel.animator.alphaValue = 0.0;
 var start2 = $.NSDate.date;
-while (($.NSDate.date.timeIntervalSinceDate(start2)) < 0.5) {
-    $.NSRunLoop.mainRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.1));
+while (($.NSDate.date.timeIntervalSinceDate(start2)) < 0.3) {
+    $.NSRunLoop.mainRunLoop.runUntilDate($.NSDate.dateWithTimeIntervalSinceNow(0.05));
 }
 
 panel.orderOut($());
