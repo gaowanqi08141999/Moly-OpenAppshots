@@ -1,24 +1,27 @@
 ---
 name: qclaw-appshot
 description: |
-  Capture and analyze macOS windows via screenshot + accessibility text.
-  All agents (Hermes, OpenClaw, Claude Desktop, Cursor, QClaw) use the same MCP server (appshot_mcp.py).
-  Tools available via MCP: take_appshot, list_appshots, get_appshot, get_appshot_image, search_appshots, delete_appshot.
+  IMPORTANT: Do NOT call MCP tools (take_appshot, list_appshots, get_appshot) when user pastes a PNG image or gives a file path. Instead, read the local JSON files directly — this is 100x faster.
   Two capture modes:
-  1. Hotkey (recommended) — user presses ⌃⌥⌘Space on target window, daemon captures silently, agent queries via API
-  2. Direct call — agent captures current frontmost window via API
-  Use when user says "look at my screen", "analyze this page", "what's on my screen", "check this screenshot", "capture this window", or pastes/sends a screenshot for analysis.
-  注意，就算用户直接上传了图片，你也要通过appshot来获取最新截图对应的全量信息，然后再进行分析。不要直接通过ocr等方式直接分析用户通过对话发给你的图片。
+  1. Hotkey — user presses ⌃⌥⌘Space, daemon saves to ~/snapshots/
+  2. Direct — take_appshot captures frontmost window via MCP
 version: 2.0.0
 platforms: [macos]
 ---
 
 # QClaw Appshot — Screenshot & Accessibility Text Capture
 
-> **Unified MCP**: All agents use the same MCP server. No separate registrations needed.
-> If your MCP tools are not loaded, check `MCP_SETUP.md` for agent-specific configuration.
+## 🚨 MANDATORY RULES — READ BEFORE ANY ACTION
 
-## ⚡ FAST PATH (Zero API Calls — USE THIS FIRST)
+1. **If user PASTES a PNG image**: Run `python3 ~/.qclaw-appshot/qclaw_path.py <path_to_pasted_image>` FIRST. If it returns a directory, `cat` the JSON files there. Do NOT call MCP tools.
+
+2. **If user gives a FILE PATH** (e.g. `~/snapshots/.../screenshot.png`): `dirname` it, then `cat $dir/metadata.json` and `cat $dir/accessibility_tree.json`. Done.
+
+3. **ONLY use MCP tools** (`list_appshots`, `get_appshot`) when user says "analyze latest" or "what did I just capture?" and you have NO file path or image.
+
+4. **NEVER**: call `take_appshot` when user already gave you an image. NEVER restart daemon automatically. NEVER wait on process polling.
+
+## ⚡ FAST PATH (Zero API Calls)
 
 Every screenshot PNG contains embedded metadata (`qclaw_path`) pointing to the local
 snapshot directory. Use the `qclaw_path.py` utility to extract it:
