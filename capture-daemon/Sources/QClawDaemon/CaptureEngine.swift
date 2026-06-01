@@ -189,13 +189,24 @@ final class CaptureEngine: @unchecked Sendable {
         }
 
         axObserverPID = pid
-        let result = AXObserverCreate(pid, { (_, _, _, _) in }, &axObserver)
-        guard result == .success, let obs = axObserver else { return }
 
-        // Observe a lightweight notification — the mere existence of ANY
-        // observer on the process signals Chrome to enable full AX support.
+        // Use a C-compatible callback (Swift closures don't reliably bridge to AXObserverCallback)
+        let callback: AXObserverCallback = { (observer, element, notification, refcon) in
+            // No-op — just serving as an active observer to wake up Chrome's AX engine
+        }
+        let result = AXObserverCreate(pid, callback, &axObserver)
+        guard result == .success, let obs = axObserver else {
+            print("[AX] ⚠️  Failed to create AXObserver for PID \(pid): error \(result.rawValue)")
+            return
+        }
+        print("[AX] ✅  Observer registered for PID \(pid)")
+
+        // Observe the focused window change — lightweight, signals Chrome's AX engine
         let app = AXUIElementCreateApplication(pid)
-        AXObserverAddNotification(obs, app, kAXFocusedUIElementChangedNotification as CFString, nil)
+        let notifyResult = AXObserverAddNotification(obs, app, kAXFocusedWindowChangedNotification as CFString, nil)
+        if notifyResult == .success {
+            print("[AX] ✅  Notification added for PID \(pid)")
+        }
 
         let source = AXObserverGetRunLoopSource(obs)
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)

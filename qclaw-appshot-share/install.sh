@@ -87,6 +87,13 @@ if ! grep -q "$INSTALL_DIR/bin" "$HOME/.zshrc" 2>/dev/null; then
     print_step "Added ~/.qclaw-appshot/bin to PATH (restart terminal to use 'qclawd' directly)"
 fi
 
+# ── Enable Chrome accessibility (Chrome lazily builds AX trees) ──
+if [[ -f "/Applications/Google Chrome.app/Contents/Info.plist" ]]; then
+    print_step "Enabling Chrome accessibility mode..."
+    defaults write com.google.Chrome AXManualAccessibility -bool true 2>/dev/null || true
+    print_step "Chrome AX mode enabled. Restart Chrome for it to take effect."
+fi
+
 # ── Install notification assets ──
 print_step "Installing notification assets..."
 
