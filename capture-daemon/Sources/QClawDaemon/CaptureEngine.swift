@@ -169,6 +169,40 @@ final class CaptureEngine: @unchecked Sendable {
         ]
     }
 
+    // Persistent AX observer — kept alive to signal Chrome/Electron that an
+    // accessibility client is active. Without this, Chrome lazy-disables its
+    // web content AX tree and only exposes browser chrome.
+    private var axObserver: AXObserver?
+    private var axObserverPID: pid_t = 0
+
+    /// Register an AX observer on a specific app PID. Chrome and Electron apps
+    /// only build full accessibility trees when they detect an active observer.
+    /// Called before each capture to ensure the target app's AX tree is ready.
+    func registerAXObserver(for pid: pid_t) {
+        if pid == axObserverPID { return } // already observing this app
+
+        // Tear down old observer
+        if axObserver != nil {
+            let oldSource = AXObserverGetRunLoopSource(axObserver!)
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), oldSource, .defaultMode)
+            axObserver = nil
+        }
+
+        axObserverPID = pid
+        let result = AXObserverCreate(pid, { (_, _, _, _) in }, &axObserver)
+        guard result == .success, let obs = axObserver else { return }
+
+        // Observe a lightweight notification — the mere existence of ANY
+        // observer on the process signals Chrome to enable full AX support.
+        let app = AXUIElementCreateApplication(pid)
+        AXObserverAddNotification(obs, app, kAXFocusedUIElementChangedNotification as CFString, nil)
+
+        let source = AXObserverGetRunLoopSource(obs)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+
+        print("[AX] Observer registered for PID \(pid)")
+    }
+
     private func extractAXTree(pid: pid_t) throws -> AXNode {
         let app = AXUIElementCreateApplication(pid)
 
