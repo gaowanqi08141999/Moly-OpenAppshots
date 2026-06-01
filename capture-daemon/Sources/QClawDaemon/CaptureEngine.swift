@@ -27,7 +27,7 @@ final class CaptureEngine: @unchecked Sendable {
 
         // 2. Run both capture pipelines concurrently
         async let pngData = captureScreenshot(windowID: windowInfo.windowID)
-        async let axTree = extractAXTree(pid: pid)
+        async let axTree = extractAXTree(pid: pid, windowID: windowInfo.windowID)
 
         let (png, tree) = try await (pngData, axTree)
 
@@ -138,93 +138,94 @@ final class CaptureEngine: @unchecked Sendable {
 
     // MARK: - Accessibility API (Text Layer)
 
-    /// Diagnostic: check AX permission status for this process.
     func axDiagnostic() -> [String: Any] {
         let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(opts)
         let binPath = Bundle.main.executablePath ?? "unknown"
-
-        // Try a basic AX call
         let testPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
         var axTest = "not tested"
         if testPID > 0 {
             let app = AXUIElementCreateApplication(testPID)
-            if let window = app.attribute(kAXFocusedWindowAttribute) {
-                let windowElem = window as! AXUIElement
-                if let children = windowElem.attribute(kAXChildrenAttribute) as? [AXUIElement] {
-                    axTest = "OK: \(children.count) children in focused window"
-                } else {
-                    axTest = "window found but no children array"
-                }
+            if let w: AXUIElement = castAttribute(app.attribute(kAXFocusedWindowAttribute)),
+               let children = w.attribute(kAXChildrenAttribute) as? [AXUIElement] {
+                axTest = "OK: \(children.count) children in focused window"
             } else {
-                axTest = "no focused window (kAXFocusedWindowAttribute returned nil)"
+                axTest = "no focused window"
+            }
+        }
+        return ["ax_trusted": trusted, "binary_path": binPath, "target_pid": testPID, "ax_test": axTest]
+    }
+
+    /// Extract AX tree. For multi-process apps like Chrome, search across all windows from
+    /// the app PID, window owner PID, and child PIDs, preferring the one with the most content.
+    private func extractAXTree(pid: pid_t, windowID: CGWindowID) throws -> AXNode {
+        var best: AXNode? = nil
+        var bestText = 0
+
+        // Collect all candidate PIDs to try
+        var pidsToTry: [pid_t] = [pid]
+
+        // Add CGWindow owner PID
+        let options: CGWindowListOption = [.optionOnScreenOnly]
+        if let winList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] {
+            for win in winList {
+                if let wid = win[kCGWindowNumber as String] as? UInt32, wid == windowID,
+                   let oPID = win[kCGWindowOwnerPID as String] as? pid_t, oPID != pid {
+                    pidsToTry.append(oPID)
+                }
             }
         }
 
-        return [
-            "ax_trusted": trusted,
-            "binary_path": binPath,
-            "target_pid": testPID,
-            "ax_test": axTest
-        ]
+        // Add child PIDs
+        let task = Process()
+        task.launchPath = "/bin/ps"; task.arguments = ["-eo", "pid,ppid", "-x"]
+        let pipe = Pipe(); task.standardOutput = pipe
+        try? task.run(); task.waitUntilExit()
+        if let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) {
+            for line in out.components(separatedBy: "\n") {
+                let parts = line.trimmingCharacters(in: .whitespaces).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                if parts.count == 2, let ch = pid_t(parts[0]), let pr = pid_t(parts[1]), pr == pid, ch != pid {
+                    pidsToTry.append(ch)
+                }
+            }
+        }
+
+        // Try each PID, take the window tree with most text content
+        for p in pidsToTry {
+            let app = AXUIElementCreateApplication(p)
+            let windows: [AXUIElement] = (app.attribute(kAXWindowsAttribute) as? [AXUIElement])
+                ?? { if let f: AXUIElement = castAttribute(app.attribute(kAXFocusedWindowAttribute)) { return [f] }; return [] }()
+            for w in windows {
+                let node = traverse(element: w, depth: 0, maxDepth: 50, maxChildren: 800)
+                let textLen = countText(node)
+                if textLen > bestText {
+                    best = node
+                    bestText = textLen
+                }
+            }
+        }
+
+        // Also try system-wide focused element
+        let system = AXUIElementCreateSystemWide()
+        var focusedRef: CFTypeRef?
+        AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focusedRef)
+        if let focused = focusedRef as! AXUIElement? {
+            let node = traverse(element: focused, depth: 0, maxDepth: 50, maxChildren: 800)
+            let textLen = countText(node)
+            if textLen > bestText && textLen > 500 {
+                best = node
+                bestText = textLen
+            }
+        }
+
+        print("[AX] Best: \(bestText) chars across \(pidsToTry.count) PIDs")
+        return best ?? traverse(element: AXUIElementCreateApplication(pid), depth: 0, maxDepth: 50, maxChildren: 800)
     }
 
-    // Persistent AX observer — kept alive to signal Chrome/Electron that an
-    // accessibility client is active. Without this, Chrome lazy-disables its
-    // web content AX tree and only exposes browser chrome.
-    private var axObserver: AXObserver?
-    private var axObserverPID: pid_t = 0
-
-    /// Register an AX observer on a specific app PID. Chrome and Electron apps
-    /// only build full accessibility trees when they detect an active observer.
-    /// Called before each capture to ensure the target app's AX tree is ready.
-    func registerAXObserver(for pid: pid_t) {
-        if pid == axObserverPID { return } // already observing this app
-
-        // Tear down old observer
-        if axObserver != nil {
-            let oldSource = AXObserverGetRunLoopSource(axObserver!)
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), oldSource, .defaultMode)
-            axObserver = nil
-        }
-
-        axObserverPID = pid
-
-        // Use a C-compatible callback (Swift closures don't reliably bridge to AXObserverCallback)
-        let callback: AXObserverCallback = { (observer, element, notification, refcon) in
-            // No-op — just serving as an active observer to wake up Chrome's AX engine
-        }
-        let result = AXObserverCreate(pid, callback, &axObserver)
-        guard result == .success, let obs = axObserver else {
-            print("[AX] ⚠️  Failed to create AXObserver for PID \(pid): error \(result.rawValue)")
-            return
-        }
-        print("[AX] ✅  Observer registered for PID \(pid)")
-
-        // Observe the focused window change — lightweight, signals Chrome's AX engine
-        let app = AXUIElementCreateApplication(pid)
-        let notifyResult = AXObserverAddNotification(obs, app, kAXFocusedWindowChangedNotification as CFString, nil)
-        if notifyResult == .success {
-            print("[AX] ✅  Notification added for PID \(pid)")
-        }
-
-        let source = AXObserverGetRunLoopSource(obs)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
-
-        print("[AX] Observer registered for PID \(pid)")
-    }
-
-    private func extractAXTree(pid: pid_t) throws -> AXNode {
-        let app = AXUIElementCreateApplication(pid)
-
-        // Focus on the main window first; fall back to focused window or app itself
-        let window: AXUIElement? = castAttribute(app.attribute(kAXMainWindowAttribute))
-            ?? castAttribute(app.attribute(kAXFocusedWindowAttribute))
-
-        if let w = window {
-            return traverse(element: w, depth: 0, maxDepth: 50, maxChildren: 800)
-        }
-        return traverse(element: app, depth: 0, maxDepth: 50, maxChildren: 800)
+    private func countText(_ node: AXNode) -> Int {
+        var total = (node.value?.count ?? 0) + (node.title?.count ?? 0) + (node.desc?.count ?? 0)
+        for child in node.children { total += countText(child) }
+        return total
     }
 
     private func traverse(element: AXUIElement, depth: Int, maxDepth: Int, maxChildren: Int) -> AXNode {
@@ -296,6 +297,7 @@ final class CaptureEngine: @unchecked Sendable {
         let windowID: CGWindowID
         let title: String
         let frame: CGRect
+        let ownerPID: pid_t       // actual window owner (renderer for Chrome)
     }
 
     private func getFrontmostWindow(pid: pid_t) throws -> WindowInfo {
@@ -304,13 +306,10 @@ final class CaptureEngine: @unchecked Sendable {
             throw CaptureError.noVisibleWindow
         }
 
-        // Get the frontmost window belonging to the target app.
-        // Windows are ordered front-to-back, so the first match is the frontmost.
         for window in windowList {
             guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t,
                   ownerPID == pid else { continue }
 
-            // Skip off-screen or tiny windows
             guard let bounds = window[kCGWindowBounds as String] as? [String: Any],
                   let x = bounds["X"] as? CGFloat,
                   let y = bounds["Y"] as? CGFloat,
@@ -318,10 +317,7 @@ final class CaptureEngine: @unchecked Sendable {
                   let h = bounds["Height"] as? CGFloat,
                   w > 50, h > 50 else { continue }
 
-            // Skip menu bar / system UI layers
-            if let layer = window[kCGWindowLayer as String] as? Int32, layer > 1000 {
-                continue
-            }
+            if let layer = window[kCGWindowLayer as String] as? Int32, layer > 1000 { continue }
 
             let windowID = CGWindowID(window[kCGWindowNumber as String] as? UInt32 ?? 0)
             let title = window[kCGWindowName as String] as? String ?? ""
@@ -329,7 +325,8 @@ final class CaptureEngine: @unchecked Sendable {
             return WindowInfo(
                 windowID: windowID,
                 title: title,
-                frame: CGRect(x: x, y: y, width: w, height: h)
+                frame: CGRect(x: x, y: y, width: w, height: h),
+                ownerPID: ownerPID
             )
         }
 

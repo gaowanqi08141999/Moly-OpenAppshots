@@ -164,7 +164,6 @@ final class IPCServer {
             do {
                 let captureResult: CaptureResult
                 if let pid = targetPID {
-                    engine.registerAXObserver(for: pid)
                     captureResult = try await engine.captureApp(pid: pid)
                 } else {
                     captureResult = try await engine.captureFrontmost()

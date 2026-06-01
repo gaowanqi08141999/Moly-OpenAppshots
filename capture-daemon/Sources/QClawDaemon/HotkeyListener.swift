@@ -98,9 +98,6 @@ final class HotkeyListener: @unchecked Sendable {
             // (NSWorkspace.frontmostApplication can return the daemon itself)
             let pid = try await getFrontmostPID()
 
-            // 1.5 Prime AX observer on the target app (wakes up Chrome's web-content AX)
-            engine.registerAXObserver(for: pid)
-
             // 2. Capture that specific app
             let result = try await engine.captureApp(pid: pid)
             let summary = try storage.save(result)
