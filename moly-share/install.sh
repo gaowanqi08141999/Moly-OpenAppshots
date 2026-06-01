@@ -1,12 +1,12 @@
 #!/bin/bash
-# QClaw Appshot — One-click installer for friends
+# Moly — One-click installer for friends
 # Usage: chmod +x install.sh && ./install.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DAEMON_BIN="${SCRIPT_DIR}/QClawDaemon"
-INSTALL_DIR="$HOME/.qclaw-appshot"
+DAEMON_BIN="${SCRIPT_DIR}/MolyDaemon"
+INSTALL_DIR="$HOME/.moly"
 HERMES_SKILLS_DIR="$HOME/.hermes/skills/appshot"
 
 # Colors
@@ -54,15 +54,15 @@ if [[ ! -d "$HOME/.hermes" ]]; then
 fi
 
 # ── Install daemon ──
-print_step "Installing QClawDaemon..."
+print_step "Installing MolyDaemon..."
 
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/bin"
 
 if [[ -f "$DAEMON_BIN" ]]; then
     # Pre-built binary included
-    cp "$DAEMON_BIN" "$INSTALL_DIR/bin/qclawd"
-    chmod +x "$INSTALL_DIR/bin/qclawd"
+    cp "$DAEMON_BIN" "$INSTALL_DIR/bin/molyd"
+    chmod +x "$INSTALL_DIR/bin/molyd"
     print_step "Installed pre-built binary."
 else
     # Need to compile
@@ -77,14 +77,14 @@ else
         exit 1
     }
     swift build -c release
-    cp ".build/release/QClawDaemon" "$INSTALL_DIR/bin/qclawd"
-    chmod +x "$INSTALL_DIR/bin/qclawd"
+    cp ".build/release/MolyDaemon" "$INSTALL_DIR/bin/molyd"
+    chmod +x "$INSTALL_DIR/bin/molyd"
 fi
 
 # Add to PATH if not already
 if ! grep -q "$INSTALL_DIR/bin" "$HOME/.zshrc" 2>/dev/null; then
     echo "export PATH=\"$INSTALL_DIR/bin:\$PATH\"" >> "$HOME/.zshrc"
-    print_step "Added ~/.qclaw-appshot/bin to PATH (restart terminal to use 'qclawd' directly)"
+    print_step "Added ~/.moly/bin to PATH (restart terminal to use 'molyd' directly)"
 fi
 
 # ── Enable Chrome accessibility (Chrome lazily builds AX trees) ──
@@ -103,18 +103,18 @@ fi
 if [[ -f "${SCRIPT_DIR}/flash.js" ]]; then
     cp "${SCRIPT_DIR}/flash.js" "$INSTALL_DIR/flash.js"
 fi
-if [[ -f "${SCRIPT_DIR}/QClaw.png" ]]; then
-    cp "${SCRIPT_DIR}/QClaw.png" "$INSTALL_DIR/QClaw.png"
+if [[ -f "${SCRIPT_DIR}/Moly.png" ]]; then
+    cp "${SCRIPT_DIR}/Moly.png" "$INSTALL_DIR/Moly.png"
 fi
-if [[ -f "${SCRIPT_DIR}/qclaw_path.py" ]]; then
-    cp "${SCRIPT_DIR}/qclaw_path.py" "$INSTALL_DIR/qclaw_path.py"
+if [[ -f "${SCRIPT_DIR}/moly_path.py" ]]; then
+    cp "${SCRIPT_DIR}/moly_path.py" "$INSTALL_DIR/moly_path.py"
 fi
 
 # ── Install MCP server (unified tool layer for ALL agents) ──
 print_step "Installing MCP server..."
 
-if [[ -f "${SCRIPT_DIR}/appshot_mcp.py" ]]; then
-    cp "${SCRIPT_DIR}/appshot_mcp.py" "$INSTALL_DIR/appshot_mcp.py"
+if [[ -f "${SCRIPT_DIR}/moly_mcp.py" ]]; then
+    cp "${SCRIPT_DIR}/moly_mcp.py" "$INSTALL_DIR/moly_mcp.py"
 fi
 
 # ── Install skill files ──
@@ -123,25 +123,25 @@ print_step "Installing skill files..."
 mkdir -p "$HERMES_SKILLS_DIR"
 cp "${SCRIPT_DIR}/SKILL.md" "$HERMES_SKILLS_DIR/"
 
-# Also copy to QClaw skills dir if it exists
-QCLAW_SKILLS_DIR="$HOME/.qclaw/skills/qclaw-appshot"
-if [[ -d "$HOME/.qclaw/skills" ]]; then
-    mkdir -p "$QCLAW_SKILLS_DIR"
-    cp "${SCRIPT_DIR}/SKILL.md" "$QCLAW_SKILLS_DIR/"
+# Also copy to Moly skills dir if it exists
+MOLY_SKILLS_DIR="$HOME/.moly/skills/moly"
+if [[ -d "$HOME/.moly/skills" ]]; then
+    mkdir -p "$MOLY_SKILLS_DIR"
+    cp "${SCRIPT_DIR}/SKILL.md" "$MOLY_SKILLS_DIR/"
 fi
 
 # ── Configure Hermes MCP (if Hermes is installed) ──
 if [[ -f "$HOME/.hermes/config.yaml" ]]; then
     print_step "Configuring Hermes MCP..."
-    if grep -q "qclaw-appshot" "$HOME/.hermes/config.yaml" 2>/dev/null; then
+    if grep -q "moly" "$HOME/.hermes/config.yaml" 2>/dev/null; then
         print_step "Hermes MCP already configured."
     elif command -v hermes &> /dev/null; then
-        hermes mcp add qclaw-appshot -- python3 "$INSTALL_DIR/appshot_mcp.py" 2>/dev/null && \
+        hermes mcp add moly -- python3 "$INSTALL_DIR/moly_mcp.py" 2>/dev/null && \
             print_step "Hermes MCP configured via 'hermes mcp add'." || \
-            print_warn "Run manually: hermes mcp add qclaw-appshot -- python3 $INSTALL_DIR/appshot_mcp.py"
+            print_warn "Run manually: hermes mcp add moly -- python3 $INSTALL_DIR/moly_mcp.py"
     else
         print_warn "Hermes CLI not in PATH. Run manually later:"
-        print_warn "  hermes mcp add qclaw-appshot -- python3 $INSTALL_DIR/appshot_mcp.py"
+        print_warn "  hermes mcp add moly -- python3 $INSTALL_DIR/moly_mcp.py"
     fi
 fi
 
@@ -151,16 +151,16 @@ print_step "Setting up auto-start..."
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
 mkdir -p "$LAUNCH_AGENTS_DIR"
 
-cat > "$LAUNCH_AGENTS_DIR/com.qclaw.daemon.plist" <<EOF
+cat > "$LAUNCH_AGENTS_DIR/com.moly.daemon.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.qclaw.daemon</string>
+    <string>com.moly.daemon</string>
     <key>ProgramArguments</key>
     <array>
-        <string>$INSTALL_DIR/bin/qclawd</string>
+        <string>$INSTALL_DIR/bin/molyd</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -174,10 +174,10 @@ cat > "$LAUNCH_AGENTS_DIR/com.qclaw.daemon.plist" <<EOF
 </plist>
 EOF
 
-launchctl load "$LAUNCH_AGENTS_DIR/com.qclaw.daemon.plist" 2>/dev/null || true
+launchctl load "$LAUNCH_AGENTS_DIR/com.moly.daemon.plist" 2>/dev/null || true
 
 # Start daemon now
-"$INSTALL_DIR/bin/qclawd" &
+"$INSTALL_DIR/bin/molyd" &
 sleep 2
 
 # ── Verify ──
@@ -199,14 +199,14 @@ echo "You MUST grant these permissions (one-time setup):"
 echo ""
 echo "1. Screen Recording:"
 echo "   System Settings → Privacy & Security → Screen Recording"
-echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/qclawd → Open → Toggle ON"
+echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/molyd → Open → Toggle ON"
 echo ""
 echo "2. Accessibility:"
 echo "   System Settings → Privacy & Security → Accessibility"
-echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/qclawd → Open → Toggle ON"
+echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/molyd → Open → Toggle ON"
 echo ""
 echo "3. Restart the daemon after granting permissions:"
-echo "   killall qclawd; ${INSTALL_DIR}/bin/qclawd &"
+echo "   killall molyd; ${INSTALL_DIR}/bin/molyd &"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${GREEN}Hotkey is ready!${NC}"

@@ -126,7 +126,7 @@ final class CaptureEngine: @unchecked Sendable {
                 try stream.addStreamOutput(
                     frameOutput,
                     type: .screen,
-                    sampleHandlerQueue: DispatchQueue(label: "com.qclaw.screenshot")
+                    sampleHandlerQueue: DispatchQueue(label: "com.moly.screenshot")
                 )
                 stream.startCapture()
             } catch {

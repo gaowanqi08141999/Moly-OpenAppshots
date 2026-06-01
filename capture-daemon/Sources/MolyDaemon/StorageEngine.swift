@@ -270,12 +270,12 @@ final class StorageEngine {
 
 // ── PNG metadata embedding ──
 
-/// Embed a tEXt chunk (qclaw_path=<dir>) into PNG data before the IEND chunk.
+/// Embed a tEXt chunk (moly_path=<dir>) into PNG data before the IEND chunk.
 /// Lets agents extract the local snapshot directory from any pasted image.
 func embedSnapshotPath(in pngData: Data, path: String) -> Data {
     var data = pngData
 
-    let keyword = "qclaw_path"
+    let keyword = "moly_path"
     let text = path
 
     // Build tEXt chunk data: keyword + null + text

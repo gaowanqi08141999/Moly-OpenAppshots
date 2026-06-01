@@ -1,32 +1,32 @@
 .PHONY: build install run clean setup-permissions notify doctor
 
 BUILD_DIR := .build/debug
-BINARY := $(BUILD_DIR)/QClawDaemon
+BINARY := $(BUILD_DIR)/MolyDaemon
 NOTIFY_BIN := $(BUILD_DIR)/AppshotNotify
 
 build:
 	swift build
 
 install: build
-	@mkdir -p ~/.qclaw-appshot/bin
-	@cp $(BINARY) ~/.qclaw-appshot/bin/qclawd
-	@chmod +x ~/.qclaw-appshot/bin/qclawd
-	@echo "Installed to ~/.qclaw-appshot/bin/qclawd"
+	@mkdir -p ~/.moly/bin
+	@cp $(BINARY) ~/.moly/bin/molyd
+	@chmod +x ~/.moly/bin/molyd
+	@echo "Installed to ~/.moly/bin/molyd"
 	@echo ""
 	@echo "Restart daemon:"
-	@echo "  killall qclawd 2>/dev/null; ~/.qclaw-appshot/bin/qclawd &"
+	@echo "  killall molyd 2>/dev/null; ~/.moly/bin/molyd &"
 	@echo ""
 	@echo "Then verify permissions:"
 	@echo "  make doctor"
 
 doctor:
-	@echo "=== QClaw Appshot Health Check ==="
+	@echo "=== Moly Health Check ==="
 	@echo ""
 	@echo "1. Daemon running?"
-	@curl -sf http://127.0.0.1:19876/health > /dev/null 2>&1 && echo "   ✅ Daemon is running" || echo "   ❌ Daemon NOT running — run: ~/.qclaw-appshot/bin/qclawd &"
+	@curl -sf http://127.0.0.1:19876/health > /dev/null 2>&1 && echo "   ✅ Daemon is running" || echo "   ❌ Daemon NOT running — run: ~/.moly/bin/molyd &"
 	@echo ""
 	@echo "2. Correct binary path?"
-	@ps aux 2>/dev/null | grep -q "\.qclaw-appshot/bin/qclawd" && echo "   ✅ Running from ~/.qclaw-appshot/bin/qclawd" || echo "   ⚠️  Check with: ps aux | grep qclawd"
+	@ps aux 2>/dev/null | grep -q "\.moly/bin/molyd" && echo "   ✅ Running from ~/.moly/bin/molyd" || echo "   ⚠️  Check with: ps aux | grep molyd"
 	@echo ""
 	@echo "3. Accessibility permission?"
 	@curl -sf http://127.0.0.1:19876/axdiag | python3 -c "
@@ -38,7 +38,7 @@ if d.get('ax_trusted'):
 else:
     print('   ❌ AX NOT trusted — PERMISSION MISSING')
     print('   FIX: Settings → Privacy → Accessibility')
-    print('   → + → ⌘⇧G → ~/.qclaw-appshot/bin/qclawd → Open')
+    print('   → + → ⌘⇧G → ~/.moly/bin/molyd → Open')
 " || echo "   ❌ Cannot reach daemon"
 	@echo ""
 	@echo "4. Screen Recording permission?"
@@ -68,11 +68,11 @@ setup-permissions:
 	@echo ""
 	@echo "1. Screen Recording:"
 	@echo "   System Preferences → Privacy & Security → Screen Recording"
-	@echo "   → Enable 'QClawDaemon' (or your terminal app)"
+	@echo "   → Enable 'MolyDaemon' (or your terminal app)"
 	@echo ""
 	@echo "2. Accessibility:"
 	@echo "   System Preferences → Privacy & Security → Accessibility"
-	@echo "   → Enable 'QClawDaemon' (or your terminal app)"
+	@echo "   → Enable 'MolyDaemon' (or your terminal app)"
 	@echo ""
 	@echo "After granting permissions, restart the daemon."
 

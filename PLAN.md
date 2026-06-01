@@ -1,4 +1,4 @@
-# QClaw-APPScreenshots — Appshots 复现规划
+# moly — Appshots 复现规划
 
 > 目标：在 macOS 平台上复现 OpenAI Codex Appshots 功能，实现双击快捷键捕获当前窗口的截图 + 结构化文本，并与智能体架构集成。
 

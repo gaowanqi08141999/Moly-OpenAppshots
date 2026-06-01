@@ -1,9 +1,9 @@
 #!/bin/bash
-# QClaw Appshots — Hermes 插件一键安装脚本
+# Molys — Hermes 插件一键安装脚本
 # 用法: chmod +x install.sh && ./install.sh
 set -e
 
-echo "=== QClaw Appshots for Hermes ==="
+echo "=== Molys for Hermes ==="
 
 # ── 1. Build daemon ──
 echo ""
@@ -11,7 +11,7 @@ echo "[1/4] Building capture daemon..."
 DAEMON_DIR="$(cd "$(dirname "$0")/capture-daemon" && pwd)"
 cd "$DAEMON_DIR"
 swift build -c debug --quiet 2>&1 | tail -1
-DAEMON_BIN="$DAEMON_DIR/.build/debug/QClawDaemon"
+DAEMON_BIN="$DAEMON_DIR/.build/debug/MolyDaemon"
 echo "  → $DAEMON_BIN"
 
 # ── 2. Install Hermes tool ──
@@ -33,7 +33,7 @@ echo "  → $SKILL_DIR/SKILL.md"
 # ── 4. Create launch script ──
 echo ""
 echo "[4/4] Creating launch agent..."
-LAUNCH_AGENT="$HOME/Library/LaunchAgents/com.qclaw.appshot.plist"
+LAUNCH_AGENT="$HOME/Library/LaunchAgents/com.moly.daemon.plist"
 cat > "$LAUNCH_AGENT" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -41,16 +41,16 @@ cat > "$LAUNCH_AGENT" << PLIST
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.qclaw.appshot</string>
+    <string>com.moly.daemon</string>
     <key>ProgramArguments</key>
     <array>
         <string>$DAEMON_BIN</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
-        <key>QCLAW_SNAPSHOT_DIR</key>
+        <key>MOLY_SNAPSHOT_DIR</key>
         <string>$HOME/snapshots</string>
-        <key>QCLAW_PORT</key>
+        <key>MOLY_PORT</key>
         <string>19876</string>
     </dict>
     <key>RunAtLoad</key>

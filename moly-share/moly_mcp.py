@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-QClaw Appshot — MCP Server (Model Context Protocol)
+Moly — MCP Server (Model Context Protocol)
 Exposes 5 daemon tools via stdio JSON-RPC for OpenClaw, Claude Desktop, Cursor, etc.
 
 Usage:
-    python3 appshot_mcp.py
+    python3 moly_mcp.py
 
 Zero external dependencies. Only requires the capture daemon running on :19876.
 """
@@ -16,7 +16,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-DAEMON_URL = os.environ.get("QCLAW_DAEMON_URL", "http://127.0.0.1:19876")
+DAEMON_URL = os.environ.get("MOLY_DAEMON_URL", "http://127.0.0.1:19876")
 
 
 # ── Daemon HTTP client ──
@@ -251,7 +251,7 @@ def handle_initialize(msg_id):
             "protocolVersion": "2024-11-05",
             "capabilities": {},
             "serverInfo": {
-                "name": "qclaw-appshot-mcp",
+                "name": "moly-mcp",
                 "version": "1.0.0",
             },
         },
@@ -298,7 +298,7 @@ def handle_tools_call(msg_id, params: dict):
 # ── Main loop ──
 
 def main():
-    print("QClaw Appshot MCP Server started", file=sys.stderr)
+    print("Moly MCP Server started", file=sys.stderr)
     print(f"Connecting to daemon at {DAEMON_URL}", file=sys.stderr)
 
     while True:

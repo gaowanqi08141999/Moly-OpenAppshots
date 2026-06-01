@@ -1,5 +1,5 @@
 ---
-name: qclaw-appshot
+name: moly
 description: |
   IMPORTANT: Do NOT call MCP tools (take_appshot, list_appshots, get_appshot) when user pastes a PNG image or gives a file path. Instead, read the local JSON files directly — this is 100x faster.
   Two capture modes:
@@ -9,11 +9,11 @@ version: 2.0.0
 platforms: [macos]
 ---
 
-# QClaw Appshot — Screenshot & Accessibility Text Capture
+# Moly — Screenshot & Accessibility Text Capture
 
 ## 🚨 MANDATORY RULES — READ BEFORE ANY ACTION
 
-1. **If user PASTES a PNG image**: Run `python3 ~/.qclaw-appshot/qclaw_path.py <path_to_pasted_image>` FIRST. If it returns a directory, `cat` the JSON files there. Do NOT call MCP tools.
+1. **If user PASTES a PNG image**: Run `python3 ~/.moly/moly_path.py <path_to_pasted_image>` FIRST. If it returns a directory, `cat` the JSON files there. Do NOT call MCP tools.
 
 2. **If user gives a FILE PATH** (e.g. `~/snapshots/.../screenshot.png`): `dirname` it, then `cat $dir/metadata.json` and `cat $dir/accessibility_tree.json`. Done.
 
@@ -23,8 +23,8 @@ platforms: [macos]
 
 ## ⚡ FAST PATH (Zero API Calls)
 
-Every screenshot PNG contains embedded metadata (`qclaw_path`) pointing to the local
-snapshot directory. Use the `qclaw_path.py` utility to extract it:
+Every screenshot PNG contains embedded metadata (`moly_path`) pointing to the local
+snapshot directory. Use the `moly_path.py` utility to extract it:
 
 ### Pattern A: User provides a file path
 
@@ -44,7 +44,7 @@ If the user pastes an image (PNG in clipboard), save it first, then extract:
 ```bash
 # 1. Save pasted image (path depends on how your agent receives attachments)
 # 2. Extract the snapshot directory from PNG metadata
-SNAP_DIR=$(python3 ~/.qclaw-appshot/qclaw_path.py /path/to/pasted.png)
+SNAP_DIR=$(python3 ~/.moly/moly_path.py /path/to/pasted.png)
 
 # 3. If SNAP_DIR is not empty, read local files directly
 if [ -n "$SNAP_DIR" ]; then
@@ -53,7 +53,7 @@ if [ -n "$SNAP_DIR" ]; then
 fi
 ```
 
-The `qclaw_path.py` script returns the snapshot directory path, or empty string if not found.
+The `moly_path.py` script returns the snapshot directory path, or empty string if not found.
 This eliminates ALL MCP/HTTP round-trips — reading local files takes milliseconds.
 
 **This eliminates ALL MCP/HTTP round-trips.** Only use the daemon API (MCP tools) when the fast path is unavailable.
@@ -65,7 +65,7 @@ This eliminates ALL MCP/HTTP round-trips — reading local files takes milliseco
 - Screen Recording + Accessibility permissions granted to **the running daemon binary path**
 - Hotkey: ⌃⌥⌘Space (built into daemon, no Shortcuts.app needed)
 
-**CRITICAL: Permissions are bound to the binary path.** If you start the daemon from `.build/debug/QClawDaemon`, permissions granted to `~/bin/qclawd` will NOT apply. Always start daemon from the same path that was authorized.
+**CRITICAL: Permissions are bound to the binary path.** If you start the daemon from `.build/debug/MolyDaemon`, permissions granted to `~/bin/molyd` will NOT apply. Always start daemon from the same path that was authorized.
 
 Verify daemon: `curl -s http://127.0.0.1:19876/health` → `{"status":"ok"}`
 
@@ -75,7 +75,7 @@ Captures frontmost window in two layers simultaneously:
 1. **Visual** — PNG screenshot (Retina 2x) via ScreenCaptureKit
 2. **Text** — Full accessibility tree via macOS Accessibility API
 
-Hotkey capture also copies screenshot PNG to system clipboard (⌘V to paste).**The PNG contains embedded metadata (`qclaw_path`) pointing to the local snapshot directory.**
+Hotkey capture also copies screenshot PNG to system clipboard (⌘V to paste).**The PNG contains embedded metadata (`moly_path`) pointing to the local snapshot directory.**
 
 ## Capture Modes
 
@@ -224,10 +224,10 @@ Default: text-only. Only request image/AX tree when truly needed.
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
-| Daemon unreachable | Not running or port blocked | `curl http://127.0.0.1:19876/health`; `lsof -i :19876`; `killall qclawd; ~/.qclaw-appshot/bin/qclawd &` |
-| Empty capture / timeout | Screen Recording permission missing | System Settings → Privacy → Screen Recording → add `~/.qclaw-appshot/bin/qclawd` |
-| Hotkey not working | Accessibility permission missing | System Settings → Privacy → Accessibility → add `~/.qclaw-appshot/bin/qclawd` |
-| **AX tree empty (text=0)** | **#1 cause: Accessibility permission not granted to daemon binary** | **Re-check System Settings → Privacy → Accessibility. The binary path must be `~/.qclaw-appshot/bin/qclawd`.** |
+| Daemon unreachable | Not running or port blocked | `curl http://127.0.0.1:19876/health`; `lsof -i :19876`; `killall molyd; ~/.moly/bin/molyd &` |
+| Empty capture / timeout | Screen Recording permission missing | System Settings → Privacy → Screen Recording → add `~/.moly/bin/molyd` |
+| Hotkey not working | Accessibility permission missing | System Settings → Privacy → Accessibility → add `~/.moly/bin/molyd` |
+| **AX tree empty (text=0)** | **#1 cause: Accessibility permission not granted to daemon binary** | **Re-check System Settings → Privacy → Accessibility. The binary path must be `~/.moly/bin/molyd`.** |
 | API returns 404 | Wrong endpoint path | Use `/snapshots`, not `/appshots` or `/list` |
 | Web page text missing | Chrome/Web AX limitation | Normal. Web content is not exposed to macOS Accessibility API. Use screenshot image instead. |
 | Stuck in retry loop | Trying non-existent endpoints | Stop. Verify daemon with `/health`. Then use `/snapshots?limit=1` exactly. |

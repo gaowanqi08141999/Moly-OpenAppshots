@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "QClawDaemon",
+    name: "MolyDaemon",
     platforms: [.macOS(.v13)],
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "QClawDaemon",
+            name: "MolyDaemon",
             dependencies: [],
-            path: "Sources/QClawDaemon",
+            path: "Sources/MolyDaemon",
             swiftSettings: [.enableUpcomingFeature("BareSlashRegexLiterals")]
         ),
         .executableTarget(

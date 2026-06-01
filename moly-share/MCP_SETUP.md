@@ -1,6 +1,6 @@
 # MCP Setup — OpenClaw / Claude Desktop / Cursor
 
-`appshot_mcp.py` exposes QClaw Appshot tools via the **Model Context Protocol (MCP)**.
+`moly_mcp.py` exposes Moly tools via the **Model Context Protocol (MCP)**.
 Any MCP-compatible client can use it.
 
 ## Requirements
@@ -11,17 +11,17 @@ Any MCP-compatible client can use it.
 ## Hermes
 
 ```bash
-hermes mcp add qclaw-appshot -- python3 ~/.qclaw-appshot/appshot_mcp.py
+hermes mcp add moly -- python3 ~/.moly/moly_mcp.py
 ```
 
 Or add manually to `~/.hermes/config.yaml`:
 
 ```yaml
 mcp_servers:
-  qclaw-appshot:
+  moly:
     command: python3
     args:
-      - ~/.qclaw-appshot/appshot_mcp.py
+      - ~/.moly/moly_mcp.py
 ```
 
 Restart Hermes. Tools appear automatically via MCP.
@@ -33,9 +33,9 @@ Add to `~/.openclaw/openclaw.json`:
 ```json
 {
   "mcpServers": {
-    "qclaw-appshot": {
+    "moly": {
       "command": "python3",
-      "args": ["/path/to/appshot_mcp.py"]
+      "args": ["/path/to/moly_mcp.py"]
     }
   }
 }
@@ -50,9 +50,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "qclaw-appshot": {
+    "moly": {
       "command": "python3",
-      "args": ["/path/to/appshot_mcp.py"]
+      "args": ["/path/to/moly_mcp.py"]
     }
   }
 }
@@ -67,9 +67,9 @@ Add to Cursor Settings → MCP:
 ```json
 {
   "mcpServers": {
-    "qclaw-appshot": {
+    "moly": {
       "command": "python3",
-      "args": ["/path/to/appshot_mcp.py"]
+      "args": ["/path/to/moly_mcp.py"]
     }
   }
 }
@@ -78,7 +78,7 @@ Add to Cursor Settings → MCP:
 ## Verify
 
 ```bash
-python3 appshot_mcp.py
+python3 moly_mcp.py
 # Then send: {"jsonrpc":"2.0","id":1,"method":"tools/list"}
 # Expected: 5 tools listed
 ```

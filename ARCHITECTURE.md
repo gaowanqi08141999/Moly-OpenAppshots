@@ -1,4 +1,4 @@
-# QClaw-APPScreenshots — 智能体插件架构设计
+# moly — 智能体插件架构设计
 
 > 将 macOS Appshots 能力封装为通用 Agent Tool Use 和 MCP 插件，同时兼容 Hermes Agents 和 OpenClaw 架构。
 
@@ -31,8 +31,8 @@ Hermes Agents 和 OpenClaw 都原生支持 MCP（Model Context Protocol），所
 │  │   Hermes Agents      │    │        OpenClaw              │ │
 │  │                      │    │                              │ │
 │  │  config.yaml:        │    │  openclaw.json:              │ │
-│  │   mcp_servers:       │    │   mcp.servers.qclaw-appshot  │ │
-│  │     qclaw-appshot    │    │                              │ │
+│  │   mcp_servers:       │    │   mcp.servers.moly  │ │
+│  │     moly    │    │                              │ │
 │  │                      │    │  → 自动发现全部 5 个 tool     │ │
 │  │  tools/appshot.py    │    │  → 自动注册 4 个 resource    │ │
 │  │  (可选增强封装)       │    │                              │ │
@@ -89,7 +89,7 @@ Hermes Agents 和 OpenClaw 都原生支持 MCP（Model Context Protocol），所
 │                             │                                │
 │                    IPC Server                                │
 │                  (Unix Socket)                               │
-│                    /tmp/qclaw-appshot.sock                   │
+│                    /tmp/moly.sock                   │
 │                                                              │
 │  POST   /capture          触发捕获                           │
 │  GET    /snapshots        列出快照                           │
@@ -105,7 +105,7 @@ Hermes Agents 和 OpenClaw 都原生支持 MCP（Model Context Protocol），所
 ## 三、项目目录结构
 
 ```
-QClaw-APPScreenshots/
+moly/
 ├── PLAN.md                          # 功能规划与概念验证
 ├── ARCHITECTURE.md                  # 本文档：架构设计
 │
@@ -124,9 +124,9 @@ QClaw-APPScreenshots/
 ├── mcp-server/                      # MCP Server (Python)
 │   ├── pyproject.toml
 │   ├── src/
-│   │   └── qclaw_appshots/
+│   │   └── molys/
 │   │       ├── __init__.py
-│   │       ├── __main__.py          # python -m qclaw_appshots
+│   │       ├── __main__.py          # python -m molys
 │   │       ├── server.py            # MCP Server 主入口
 │   │       ├── tools.py             # 5 个 tool 的 schema + handler
 │   │       ├── resources.py         # 4 个 resource 定义
@@ -298,13 +298,13 @@ Hermes 原生支持通过配置文件接入外部 MCP Server：
 ```yaml
 # hermes config.yaml
 mcp_servers:
-  - name: qclaw-appshot
+  - name: moly
     transport: stdio
     command: python
-    args: ["-m", "qclaw_appshots"]
+    args: ["-m", "molys"]
     env:
-      QCLAW_DAEMON_SOCK: "/tmp/qclaw-appshot.sock"
-      QCLAW_SNAPSHOT_DIR: "~/snapshots"
+      MOLY_DAEMON_SOCK: "/tmp/moly.sock"
+      MOLY_SNAPSHOT_DIR: "~/snapshots"
 ```
 
 配置后 Hermes 会自动发现 5 个 tool + 4 个 resource，无需写代码。
@@ -323,7 +323,7 @@ import asyncio
 import json
 from tools.registry import registry
 
-MCP_SERVER_COMMAND = ["python", "-m", "qclaw_appshots"]
+MCP_SERVER_COMMAND = ["python", "-m", "molys"]
 
 
 def _check_macos_daemon():
@@ -332,7 +332,7 @@ def _check_macos_daemon():
     import os
     if platform.system() != "Darwin":
         return False
-    return os.path.exists("/tmp/qclaw-appshot.sock")
+    return os.path.exists("/tmp/moly.sock")
 
 
 async def take_appshot(**kwargs) -> str:
@@ -444,13 +444,13 @@ OpenClaw 只需 JSON 配置，零代码：
 {
   "mcp": {
     "servers": {
-      "qclaw-appshot": {
+      "moly": {
         "command": "python",
-        "args": ["-m", "qclaw_appshots"],
+        "args": ["-m", "molys"],
         "transport": "stdio",
         "env": {
-          "QCLAW_DAEMON_SOCK": "/tmp/qclaw-appshot.sock",
-          "QCLAW_SNAPSHOT_DIR": "/Users/jane/snapshots"
+          "MOLY_DAEMON_SOCK": "/tmp/moly.sock",
+          "MOLY_SNAPSHOT_DIR": "/Users/jane/snapshots"
         }
       }
     }
@@ -458,7 +458,7 @@ OpenClaw 只需 JSON 配置，零代码：
   "tools": {
     "sandbox": {
       "tools": {
-        "allow": ["qclaw-appshot_take_appshot", "qclaw-appshot_list_appshots", "qclaw-appshot_get_appshot", "qclaw-appshot_search_appshots", "qclaw-appshot_delete_appshot"]
+        "allow": ["moly_take_appshot", "moly_list_appshots", "moly_get_appshot", "moly_search_appshots", "moly_delete_appshot"]
       }
     }
   }
@@ -476,12 +476,12 @@ OpenClaw 只需 JSON 配置，零代码：
         "config": {
           "servers": [
             {
-              "name": "qclaw-appshot",
+              "name": "moly",
               "transport": "stdio",
               "command": "python",
-              "args": ["-m", "qclaw_appshots"],
+              "args": ["-m", "molys"],
               "env": {
-                "QCLAW_DAEMON_SOCK": "/tmp/qclaw-appshot.sock"
+                "MOLY_DAEMON_SOCK": "/tmp/moly.sock"
               }
             }
           ]
@@ -498,7 +498,7 @@ OpenClaw 只需 JSON 配置，零代码：
 
 ### IPC 协议
 
-Daemon 在 `/tmp/qclaw-appshot.sock` 上提供 HTTP/1.1 服务：
+Daemon 在 `/tmp/moly.sock` 上提供 HTTP/1.1 服务：
 
 | Method | Path | Request Body | Response | 说明 |
 |--------|------|-------------|----------|------|

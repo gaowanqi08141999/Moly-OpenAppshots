@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Extract qclaw_path from PNG metadata. Usage: python3 qclaw_path.py <png_file>"""
+"""Extract moly_path from PNG metadata. Usage: python3 moly_path.py <png_file>"""
 import struct, sys
 
 if len(sys.argv) < 2:
-    print("Usage: python3 qclaw_path.py <screenshot.png>")
+    print("Usage: python3 moly_path.py <screenshot.png>")
     sys.exit(1)
 
 with open(sys.argv[1], 'rb') as f:
@@ -16,7 +16,7 @@ while pos < len(data) - 12:
     if chunk_type == 'tEXt':
         chunk_data = data[pos+8:pos+8+length]
         parts = chunk_data.split(b'\x00', 1)
-        if parts[0] == b'qclaw_path':
+        if parts[0] == b'moly_path':
             snap_dir = parts[1].decode('utf-8')
             print(snap_dir)
             sys.exit(0)

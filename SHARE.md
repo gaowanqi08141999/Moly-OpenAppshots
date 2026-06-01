@@ -1,4 +1,4 @@
-# QClaw Appshots — 分享指南
+# Molys — 分享指南
 
 两个文件 + 一个 daemon = 让你的 Hermes 能"看见"你的屏幕。
 
@@ -6,7 +6,7 @@
 
 1. **截图即复制** — 按热键截图后，PNG **自动复制到系统剪贴板**。直接 ⌘V 粘贴到任何对话框。
 2. **内置热键** — daemon 原生监听 ⌃⌥⌘Space，**不需要 Shortcuts.app 配置**。
-3. **统一 MCP** — 所有 AI 智能体（Hermes、OpenClaw、Claude Desktop、Cursor、QClaw）都用同一个 MCP server 接入。
+3. **统一 MCP** — 所有 AI 智能体（Hermes、OpenClaw、Claude Desktop、Cursor、Moly）都用同一个 MCP server 接入。
 4. **一键安装** — `chmod +x install.sh && ./install.sh` 搞定一切。
 
 ## 你需要给你的朋友
@@ -14,7 +14,7 @@
 ### 1. 整个项目文件夹（或至少这三个东西）
 
 ```
-QClaw-APPScreenshots/
+moly/
 ├── install.sh                          # 一键安装
 ├── capture-daemon/                     # Swift daemon 源码
 ├── hermes-plugin/tools/appshot.py      # Hermes 工具注册（单文件）
@@ -28,19 +28,19 @@ QClaw-APPScreenshots/
 - Hermes Agent 已安装
 - **屏幕录制** + **辅助功能** 权限（安装时会引导开启）
 
-> 不需要 Swift/Xcode！安装包包含预编译好的 `QClawDaemon` 二进制。
+> 不需要 Swift/Xcode！安装包包含预编译好的 `MolyDaemon` 二进制。
 
 ### 3. 安装步骤
 
 ```bash
-cd qclaw-appshot-share
+cd moly-share
 chmod +x install.sh
 ./install.sh
 ```
 
 脚本自动完成：
-1. 复制预编译 daemon → `~/.qclaw-appshot/bin/qclawd`
-2. 复制通知资源 → `~/.qclaw-appshot/`
+1. 复制预编译 daemon → `~/.moly/bin/molyd`
+2. 复制通知资源 → `~/.moly/`
 3. 复制 `appshot.py` → `~/.hermes/hermes-agent/tools/`
 4. 复制 skill → `~/.hermes/skills/appshot/`
 5. 创建 LaunchAgent → daemon 开机自启
@@ -80,11 +80,11 @@ cp hermes-plugin/skills/appshot-context.md ~/.hermes/skills/appshot/SKILL.md
 
 ### 步骤 3: 启动 daemon（统一使用固定路径）
 
-⚠️ **重要**：始终使用 `~/bin/qclawd`（install.sh 安装的路径），**不要**直接运行 `.build/debug/QClawDaemon`。macOS 按二进制路径授权权限，路径变了权限就失效。
+⚠️ **重要**：始终使用 `~/bin/molyd`（install.sh 安装的路径），**不要**直接运行 `.build/debug/MolyDaemon`。macOS 按二进制路径授权权限，路径变了权限就失效。
 
 ```bash
 # 启动（统一路径，install.sh 默认安装位置）
-nohup ~/.qclaw-appshot/bin/qclawd > /dev/null 2>&1 &
+nohup ~/.moly/bin/molyd > /dev/null 2>&1 &
 ```
 
 ### 步骤 4: 授予权限
@@ -101,7 +101,7 @@ nohup ~/.qclaw-appshot/bin/qclawd > /dev/null 2>&1 &
 |------|------|------|
 | 工具不出现 | `appshot.py` 没放对位置 | 检查 `ls ~/.hermes/hermes-agent/tools/appshot.py` |
 | 捕获超时 | 没给屏幕录制权限 | 系统偏好设置 → 屏幕录制 |
-| AX 树为空 | 辅助功能权限路径不匹配 | 确认系统设置里授权的是**实际运行的 daemon 路径**（`~/bin/qclawd`，不是 `.build/debug/QClawDaemon`） |
+| AX 树为空 | 辅助功能权限路径不匹配 | 确认系统设置里授权的是**实际运行的 daemon 路径**（`~/bin/molyd`，不是 `.build/debug/MolyDaemon`） |
 | 连接被拒 | daemon 没启动 | `curl http://127.0.0.1:19876/health` |
 
 ---
@@ -111,7 +111,7 @@ nohup ~/.qclaw-appshot/bin/qclawd > /dev/null 2>&1 &
 ```
 Hermes Agent
   │
-  ├─ tools/appshot.py  ←──HTTP──→  QClawDaemon (:19876)
+  ├─ tools/appshot.py  ←──HTTP──→  MolyDaemon (:19876)
   │   (5 tools)                         │
   │                                ScreenCaptureKit  →  PNG
   └─ skills/appshot/               Accessibility API →  Text Tree

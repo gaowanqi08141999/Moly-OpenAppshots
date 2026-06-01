@@ -1,10 +1,10 @@
 #!/bin/bash
-# QClaw Appshot — Hotkey Capture Script (Standalone Share Version)
+# Moly — Hotkey Capture Script (Standalone Share Version)
 # Captures the CURRENT frontmost window without focus-stealing.
 # After capture, the screenshot PNG is auto-copied to the system clipboard.
-# All companion files (notify.js, QClaw.png) are in the same directory.
+# All companion files (notify.js, Moly.png) are in the same directory.
 
-DAEMON_URL="${QCLAW_DAEMON_URL:-http://127.0.0.1:19876}"
+DAEMON_URL="${MOLY_DAEMON_URL:-http://127.0.0.1:19876}"
 
 # Step 1: Get the REAL frontmost app's PID — BEFORE any focus change
 FRONTMOST_PID=$(osascript -e 'tell application "System Events" to get unix id of first process whose frontmost is true' 2>/dev/null)
@@ -43,7 +43,7 @@ fi
 # Step 5: Show Apple-style notification overlay (JXA)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 NOTIFY_JS="${SCRIPT_DIR}/notify.js"
-ICON_PNG="${SCRIPT_DIR}/QClaw.png"
+ICON_PNG="${SCRIPT_DIR}/Moly.png"
 
 if [ -f "$NOTIFY_JS" ]; then
     osascript -l JavaScript "$NOTIFY_JS" "${APP_NAME}" "${ICON_PNG}" &

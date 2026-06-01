@@ -1,4 +1,4 @@
-# QClaw Appshot — macOS Screenshot + Accessibility Text Capture
+# Moly — macOS Screenshot + Accessibility Text Capture
 
 All AI agents (Hermes, OpenClaw, Claude Desktop, Cursor) connect via **MCP** (Model Context Protocol).
 One tool server, one configuration format, everywhere.
@@ -24,12 +24,12 @@ chmod +x install.sh && ./install.sh
 
 | Permission | Path to add |
 |-----------|-------------|
-| Screen Recording | System Settings → Privacy → Screen Recording → + → ⌘⇧G → `~/.qclaw-appshot/bin/qclawd` |
-| Accessibility | System Settings → Privacy → Accessibility → + → ⌘⇧G → `~/.qclaw-appshot/bin/qclawd` |
+| Screen Recording | System Settings → Privacy → Screen Recording → + → ⌘⇧G → `~/.moly/bin/molyd` |
+| Accessibility | System Settings → Privacy → Accessibility → + → ⌘⇧G → `~/.moly/bin/molyd` |
 
 ```bash
 # 3. Restart daemon after granting permissions
-killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
+killall molyd; sleep 1; ~/.moly/bin/molyd &
 ```
 
 **4. Chrome users** (for web page text extraction):  
@@ -51,12 +51,12 @@ Or manually:
 cd capture-daemon && make install
 
 # 2. Start daemon
-nohup ~/.qclaw-appshot/bin/qclawd > /dev/null 2>&1 &
+nohup ~/.moly/bin/molyd > /dev/null 2>&1 &
 
 # 3. Copy MCP server to assets dir
-cp appshot_mcp.py ~/.qclaw-appshot/
+cp moly_mcp.py ~/.moly/
 cp SKILL.md ~/.hermes/skills/appshot/   # Hermes
-cp SKILL.md ~/.qclaw/skills/qclaw-appshot/  # QClaw
+cp SKILL.md ~/.moly/skills/moly/  # Moly
 
 # 4. Add MCP server to your agent config (see MCP_SETUP.md)
 ```
@@ -71,14 +71,14 @@ cp SKILL.md ~/.qclaw/skills/qclaw-appshot/  # QClaw
 
 | File | Purpose |
 |------|---------|
-| `appshot_mcp.py` | **MCP server** — 6 tools for all agents |
+| `moly_mcp.py` | **MCP server** — 6 tools for all agents |
 | `SKILL.md` | Agent skill instructions |
 | `MCP_SETUP.md` | MCP configuration guide (Hermes, OpenClaw, Claude Desktop, Cursor) |
-| `QClawDaemon` | Pre-built daemon binary |
+| `MolyDaemon` | Pre-built daemon binary |
 | `install.sh` | One-click installer |
 | `notify.js` | Apple-style notification overlay (JXA, white rounded) |
 | `flash.js` | Screen flash effect on capture |
-| `QClaw.png` | Notification icon |
+| `Moly.png` | Notification icon |
 | `capture-hotkey.sh` | Standalone hotkey script (legacy, Shortcuts.app) |
 
 ## Agent Configuration (one-time)
@@ -88,16 +88,16 @@ cp SKILL.md ~/.qclaw/skills/qclaw-appshot/  # QClaw
 ```json
 // Hermes (config.yaml):
 mcp_servers:
-  qclaw-appshot:
+  moly:
     command: python3
-    args: ["~/.qclaw-appshot/appshot_mcp.py"]
+    args: ["~/.moly/moly_mcp.py"]
 
 // Claude Desktop / Cursor / OpenClaw:
 {
   "mcpServers": {
-    "qclaw-appshot": {
+    "moly": {
       "command": "python3",
-      "args": ["/path/to/appshot_mcp.py"]
+      "args": ["/path/to/moly_mcp.py"]
     }
   }
 }

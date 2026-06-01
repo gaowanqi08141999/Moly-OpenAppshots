@@ -33,7 +33,7 @@ final class HotkeyListener: @unchecked Sendable {
         let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary
         guard AXIsProcessTrustedWithOptions(opts) else {
             print("[HotkeyListener] ⚠️  Accessibility permission not granted.")
-            print("  → System Settings → Privacy & Security → Accessibility → Enable QClawDaemon")
+            print("  → System Settings → Privacy & Security → Accessibility → Enable MolyDaemon")
             return
         }
 

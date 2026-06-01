@@ -1,12 +1,12 @@
 [package]
-name = "qclaw-appshot-daemon"
+name = "moly-daemon"
 version = "0.1.0"
 edition = "2024"
-description = "macOS native capture daemon for QClaw-APPScreenshots"
+description = "macOS native capture daemon for moly"
 license = "MIT"
 
 [[bin]]
-name = "qclaw-appshotd"
+name = "molyd"
 path = "src/main.rs"
 
 [dependencies]
