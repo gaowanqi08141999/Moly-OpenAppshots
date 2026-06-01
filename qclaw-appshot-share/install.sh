@@ -133,10 +133,15 @@ fi
 # ── Configure Hermes MCP (if Hermes is installed) ──
 if [[ -f "$HOME/.hermes/config.yaml" ]]; then
     print_step "Configuring Hermes MCP..."
-    if ! grep -q "qclaw-appshot" "$HOME/.hermes/config.yaml" 2>/dev/null; then
-        print_warn "Please run: hermes mcp add qclaw-appshot -- python3 $INSTALL_DIR/appshot_mcp.py"
-    else
+    if grep -q "qclaw-appshot" "$HOME/.hermes/config.yaml" 2>/dev/null; then
         print_step "Hermes MCP already configured."
+    elif command -v hermes &> /dev/null; then
+        hermes mcp add qclaw-appshot -- python3 "$INSTALL_DIR/appshot_mcp.py" 2>/dev/null && \
+            print_step "Hermes MCP configured via 'hermes mcp add'." || \
+            print_warn "Run manually: hermes mcp add qclaw-appshot -- python3 $INSTALL_DIR/appshot_mcp.py"
+    else
+        print_warn "Hermes CLI not in PATH. Run manually later:"
+        print_warn "  hermes mcp add qclaw-appshot -- python3 $INSTALL_DIR/appshot_mcp.py"
     fi
 fi
 
@@ -210,5 +215,21 @@ echo ""
 echo "Press ⌃⌥⌘Space to capture any window."
 echo "The screenshot PNG is automatically copied to your clipboard."
 echo ""
-echo "Then restart Hermes and try: 'Take an appshot'"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${GREEN}Optional: Chrome Accessibility${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "For web pages in Google Chrome, also enable Chrome in Accessibility:"
+echo "   System Settings → Privacy & Security → Accessibility"
+echo "   → + → Applications → Google Chrome → Open → Toggle ON"
+echo "   Then ⌘Q quit Chrome and reopen."
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${GREEN}Verify${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Verify everything works:"
+echo "   cd capture-daemon && make doctor"
+echo ""
+echo "Then restart your agent and try: 'Analyze my latest screenshot'"
 echo ""

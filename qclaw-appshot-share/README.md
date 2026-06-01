@@ -18,21 +18,30 @@ Everything runs locally — no cloud uploads, no API keys.
 ```bash
 # 1. Install
 chmod +x install.sh && ./install.sh
+```
 
-# 2. Grant permissions (MANDATORY — macOS will not prompt automatically)
-#    System Settings → Privacy & Security → Screen Recording
-#      → + → ⌘⇧G → ~/.qclaw-appshot/bin/qclawd → toggle ON
-#    System Settings → Privacy & Security → Accessibility
-#      → + → ⌘⇧G → ~/.qclaw-appshot/bin/qclawd → toggle ON
+**2. Grant macOS Permissions** (MANDATORY — open both settings pages):
 
-# 3. Restart daemon
+| Permission | Path to add |
+|-----------|-------------|
+| Screen Recording | System Settings → Privacy → Screen Recording → + → ⌘⇧G → `~/.qclaw-appshot/bin/qclawd` |
+| Accessibility | System Settings → Privacy → Accessibility → + → ⌘⇧G → `~/.qclaw-appshot/bin/qclawd` |
+
+```bash
+# 3. Restart daemon after granting permissions
 killall qclawd; sleep 1; ~/.qclaw-appshot/bin/qclawd &
+```
 
-# 4. Verify everything works
+**4. Chrome users** (for web page text extraction):  
+System Settings → Privacy → Accessibility → + → Google Chrome → toggle ON → ⌘Q + reopen Chrome
+
+```bash
+# 5. Verify everything works
 cd capture-daemon && make doctor
+# → ✅ Daemon running / ✅ AX trusted / ✅ Capture OK
 
-# 5. Configure your agent's MCP (see MCP_SETUP.md)
-# 6. Press ⌃⌥⌘Space to capture any window
+# 6. Configure your agent's MCP (see MCP_SETUP.md)
+# 7. Press ⌃⌥⌘Space to capture any window
 ```
 
 Or manually:

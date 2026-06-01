@@ -8,6 +8,24 @@ Any MCP-compatible client can use it.
 - Python 3.10+
 - Capture daemon running on `127.0.0.1:19876`
 
+## Hermes
+
+```bash
+hermes mcp add qclaw-appshot -- python3 ~/.qclaw-appshot/appshot_mcp.py
+```
+
+Or add manually to `~/.hermes/config.yaml`:
+
+```yaml
+mcp_servers:
+  qclaw-appshot:
+    command: python3
+    args:
+      - ~/.qclaw-appshot/appshot_mcp.py
+```
+
+Restart Hermes. Tools appear automatically via MCP.
+
 ## OpenClaw
 
 Add to `~/.openclaw/openclaw.json`:
