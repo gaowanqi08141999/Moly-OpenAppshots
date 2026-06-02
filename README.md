@@ -5,6 +5,8 @@
 
 # Moly — Open Appshots for AI Agents
 
+[English](README.md) | [中文](README_CN.md)
+
 > *A tiny mole that sees your screen and tells AI agents what's there.*
 
 Moly captures your macOS screen — screenshot + accessibility text — and feeds it to any AI agent through a standard MCP (Model Context Protocol) interface. Press a hotkey, paste the image, and your agent reads everything on your screen in milliseconds.
