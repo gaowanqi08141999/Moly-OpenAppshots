@@ -39,21 +39,30 @@ panel.hasShadow = true;
 // Solid white rounded background
 var bg = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, PW, PH));
 bg.wantsLayer = true;
+var sf2 = $.NSScreen.mainScreen;
+if (sf2 && sf2.backingScaleFactor) {
+    bg.layer.contentsScale = sf2.backingScaleFactor;
+}
 bg.layer.backgroundColor = $.NSColor.whiteColor.CGColor;
 bg.layer.cornerRadius = R;
 bg.layer.masksToBounds = true;
 panel.contentView.addSubview(bg);
 
-// Icon — portrait aspect ratio (42×52 matches original mole artwork)
+// Icon — portrait aspect ratio (42×52, content @2x for Retina)
 var iconY = (PH - iconH) / 2;
 var iv = $.NSImageView.alloc.initWithFrame($.NSMakeRect(20, iconY, iconW, iconH));
 iv.imageScaling = $.NSImageScaleProportionallyUpOrDown;
+iv.imageAlignment = $.NSImageAlignCenter;
 
 var customIcon = null;
 if (iconPath.length > 0) {
     var iconData = $.NSData.dataWithContentsOfFile($(iconPath));
     if (iconData) {
         customIcon = $.NSImage.alloc.initWithData(iconData);
+        // Set the image's intrinsic size so Retina displays use full resolution
+        if (customIcon) {
+            customIcon.setSize($.NSMakeSize(iconW, iconH));
+        }
     }
 }
 var iconValid = false;
