@@ -1,7 +1,3 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/gaowanqi08141999/moly/main/Moly.png">
-  <img src="https://raw.githubusercontent.com/gaowanqi08141999/moly/main/Moly.png" alt="Moly" width="120" align="right">
-</picture>
 <img src="https://raw.githubusercontent.com/gaowanqi08141999/moly/main/cover.png" style="display:none">
 
 # Moly — 面向 AI 智能体的开源截图工具
