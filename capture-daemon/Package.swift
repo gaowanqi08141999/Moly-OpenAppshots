@@ -12,10 +12,5 @@ let package = Package(
             path: "Sources/MolyDaemon",
             swiftSettings: [.enableUpcomingFeature("BareSlashRegexLiterals")]
         ),
-        .executableTarget(
-            name: "AppshotNotify",
-            dependencies: [],
-            path: "Sources/AppshotNotify"
-        ),
     ]
 )
