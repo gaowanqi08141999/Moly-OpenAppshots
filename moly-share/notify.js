@@ -23,7 +23,7 @@ app.setActivationPolicy($.NSApplicationActivationPolicyAccessory);
 
 // 1.5x scale: 450×96 panel, 30px margin
 var PW = 450, PH = 96, M = 30, R = 20;
-var fontSize = 18, subFontSize = 14, iconSize = 42;
+var fontSize = 18, subFontSize = 14, iconW = 42, iconH = 52;
 
 var panel = $.NSPanel.alloc.initWithContentRectStyleMaskBackingDefer(
     $.NSMakeRect(0, 0, PW, PH),
@@ -44,9 +44,9 @@ bg.layer.cornerRadius = R;
 bg.layer.masksToBounds = true;
 panel.contentView.addSubview(bg);
 
-// Icon
-var iconY = (PH - iconSize) / 2;
-var iv = $.NSImageView.alloc.initWithFrame($.NSMakeRect(20, iconY, iconSize, iconSize));
+// Icon — portrait aspect ratio (42×52 matches original mole artwork)
+var iconY = (PH - iconH) / 2;
+var iv = $.NSImageView.alloc.initWithFrame($.NSMakeRect(20, iconY, iconW, iconH));
 iv.imageScaling = $.NSImageScaleProportionallyUpOrDown;
 
 var customIcon = null;
@@ -66,7 +66,7 @@ if (iconValid) {
     var fallback = $.NSImage.imageWithSystemSymbolNameAccessibilityDescription($("checkmark.circle.fill"), $());
     if (fallback) {
         iv.image = fallback.imageWithSymbolConfiguration(
-            $.NSImageSymbolConfiguration.configurationWithPointSizeWeight(iconSize, 0.23)
+            $.NSImageSymbolConfiguration.configurationWithPointSizeWeight(iconW, 0.23)
         );
         iv.contentTintColor = $.NSColor.systemGreenColor;
     }
