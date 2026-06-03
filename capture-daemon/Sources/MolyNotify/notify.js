@@ -44,7 +44,7 @@ bg.layer.cornerRadius = R;
 bg.layer.masksToBounds = true;
 panel.contentView.addSubview(bg);
 
-// Icon — portrait aspect ratio (42×52 matches original mole artwork)
+// Icon — portrait aspect ratio (42×52 matches original cat artwork)
 var iconY = (PH - iconH) / 2;
 var iv = $.NSImageView.alloc.initWithFrame($.NSMakeRect(20, iconY, iconW, iconH));
 iv.imageScaling = $.NSImageScaleProportionallyUpOrDown;

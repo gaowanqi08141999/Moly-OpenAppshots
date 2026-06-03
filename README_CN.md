@@ -4,9 +4,27 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-> *一只看得见屏幕的小鼹鼠，把你眼前的一切告诉 AI。*
+> *一只聪明的小猫，看见你的屏幕，告诉 AI 一切。*
 
-按一下快捷键，Moly 同时捕获 macOS 屏幕截图和可访问性文本树，通过标准 MCP 协议喂给任何 AI 智能体。截图自动复制到剪贴板，贴到对话框里，智能体瞬间就读懂你的屏幕。
+**Moly** 一键捕获 macOS 屏幕——截图 + 可访问性文本树——通过标准 MCP 协议喂给任何 AI 智能体。
+
+### Moly 做什么
+
+- **一键截图（⌃⌥⌘Space）**：同时捕获前台窗口的两层信息
+- **视觉层**：Retina 2x PNG 高清截图，通过 macOS ScreenCaptureKit 获取
+- **文本层**：完整的可访问性元素树——智能体可以读取屏幕上的每一个标签、按钮和段落
+- **剪贴板自动复制**：截图自动入剪贴板，⌘V 直接粘贴
+- **零 API 调用**：粘贴的 PNG 携带嵌入式元数据指向本地文件路径，智能体直接读磁盘，毫秒级完成
+
+### 实现原理
+
+1. 一个轻量级 Swift daemon（`~/.moly/bin/molyd`）在本地 19876 端口运行
+2. 通过 CGEvent tap 全局监听 ⌃⌥⌘Space 快捷键
+3. 截图时获取前台窗口 PID，ScreenCaptureKit 截图，同时遍历窗口的可访问性元素树
+4. 两者保存到 `~/snapshots/<日期>/<ID>/`，由 SQLite 索引
+5. PNG 嵌入 `moly_path` 元数据指向其快照目录，然后复制到剪贴板
+6. Python MCP 服务器（`moly_mcp.py`）通过 stdio JSON-RPC 暴露 5 个工具——任何 MCP 兼容的智能体都能调用
+7. 如果用户粘贴图片，智能体从 PNG 中提取 `moly_path`，直接读取本地 JSON 文件——无需 API 调用
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org)

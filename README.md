@@ -4,16 +4,34 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-> *A tiny mole that sees your screen and tells AI agents what's there.*
+> *A clever little cat that sees your screen and tells AI agents what's there.*
 
-Moly captures your macOS screen — screenshot + accessibility text — and feeds it to any AI agent through a standard MCP (Model Context Protocol) interface. Press a hotkey, paste the image, and your agent reads everything on your screen in milliseconds.
+**Moly** captures your macOS screen — screenshot + accessibility text tree — and feeds the result to any AI agent through a standard MCP (Model Context Protocol) interface.
+
+### What Moly does
+
+- **One hotkey (⌃⌥⌘Space)** captures the frontmost window in two layers simultaneously
+- **Screenshot**: High-fidelity Retina 2x PNG via macOS ScreenCaptureKit
+- **Text tree**: Full accessibility tree via macOS Accessibility API — your agent reads every label, button, and paragraph on screen
+- **Instant clipboard**: The PNG is automatically copied to your clipboard for ⌘V paste
+- **Zero API calls**: Pasted PNGs carry embedded metadata pointing to local snapshot files — agents read directly from disk in milliseconds
+
+### How it works
+
+1. A lightweight Swift daemon (`~/.moly/bin/molyd`) runs locally on port 19876
+2. It listens for the ⌃⌥⌘Space hotkey globally via a CGEvent tap
+3. On capture, it gets the frontmost window's PID, snaps a screenshot (ScreenCaptureKit), and traverses the window's accessibility element tree
+4. Both are saved to `~/snapshots/<date>/<id>/` with a SQLite index
+5. The PNG is embedded with `moly_path` metadata pointing to its snapshot directory, then copied to the clipboard
+6. A Python MCP server (`moly_mcp.py`) exposes 5 tools via stdio JSON-RPC — any MCP-compatible agent can call them
+7. If the user pastes an image, the agent extracts `moly_path` from the PNG and reads local JSON files directly — no API round-trip needed
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple)](https://modelcontextprotocol.io/)
 
-## How it works
+## Architecture Diagram
 
 ```
 You press ⌃⌥⌘Space
