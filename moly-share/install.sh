@@ -5,7 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DAEMON_BIN="${SCRIPT_DIR}/MolyDaemon"
+DAEMON_BIN="${SCRIPT_DIR}/molyd"
 INSTALL_DIR="$HOME/.moly"
 HERMES_SKILLS_DIR="$HOME/.hermes/skills/appshot"
 
