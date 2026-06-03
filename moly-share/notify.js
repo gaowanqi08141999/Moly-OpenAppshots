@@ -25,6 +25,13 @@ app.setActivationPolicy($.NSApplicationActivationPolicyAccessory);
 var PW = 450, PH = 96, M = 30, R = 20;
 var fontSize = 18, subFontSize = 14, iconW = 42, iconH = 52;
 
+// Get main screen (headless-safe: JXA wraps nil as NSNull, use ObjC.unwrap)
+var mainScreen;
+try { mainScreen = $.NSScreen.mainScreen; } catch(e) {}
+if (ObjC.unwrap(mainScreen) === null) {
+    try { mainScreen = $.NSScreen.screens.objectAtIndex(0); } catch(e2) {}
+}
+
 var panel = $.NSPanel.alloc.initWithContentRectStyleMaskBackingDefer(
     $.NSMakeRect(0, 0, PW, PH),
     $.NSWindowStyleMaskBorderless | $.NSWindowStyleMaskNonactivatingPanel,
@@ -39,13 +46,12 @@ panel.hasShadow = true;
 // Solid white rounded background
 var bg = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, PW, PH));
 bg.wantsLayer = true;
-var sf2 = $.NSScreen.mainScreen;
-if (sf2 && sf2.backingScaleFactor) {
-    bg.layer.contentsScale = sf2.backingScaleFactor;
-}
 bg.layer.backgroundColor = $.NSColor.whiteColor.CGColor;
 bg.layer.cornerRadius = R;
 bg.layer.masksToBounds = true;
+
+// Enable Retina rendering (safe fallback to 2.0)
+try { bg.layer.contentsScale = mainScreen.backingScaleFactor; } catch(e) { bg.layer.contentsScale = 2.0; }
 panel.contentView.addSubview(bg);
 
 // Icon — portrait aspect ratio (42×52, content @2x for Retina)
@@ -104,8 +110,9 @@ if (showSub) {
     bg.addSubview(sl);
 }
 
-// Position top-right
-var sf = $.NSScreen.mainScreen.visibleFrame;
+// Position top-right (fallback frame for headless contexts)
+var sf = $.NSMakeRect(0, 0, 1920, 1080);
+try { sf = mainScreen.visibleFrame; } catch(e) {}
 panel.setFrameOrigin($.NSMakePoint(sf.origin.x + sf.size.width - PW - M, sf.origin.y + sf.size.height - PH - M));
 
 // Show instantly (no animator delay — faster)
