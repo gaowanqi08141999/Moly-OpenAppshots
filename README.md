@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/gaowanqi08141999/moly/main/cover.png" style="display:none">
+<img src="https://raw.githubusercontent.com/gaowanqi08141999/Moly-OpenAppshots/main/cover.png" style="display:none">
 
 # Moly — Open Appshots for AI Agents
 
@@ -73,7 +73,7 @@ You press ⌃⌥⌘Space
 
 ```bash
 # 1. Download and install
-git clone https://github.com/gaowanqi08141999/moly.git
+git clone https://github.com/gaowanqi08141999/Moly-OpenAppshots.git
 cd moly/moly-share
 chmod +x install.sh && ./install.sh
 

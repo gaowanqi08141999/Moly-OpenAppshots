@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/gaowanqi08141999/moly/main/cover.png" style="display:none">
+<img src="https://raw.githubusercontent.com/gaowanqi08141999/Moly-OpenAppshots/main/cover.png" style="display:none">
 
 # Moly — 面向 AI 智能体的开源截图工具
 
@@ -73,7 +73,7 @@
 
 ```bash
 # 1. 下载安装
-git clone https://github.com/gaowanqi08141999/moly.git
+git clone https://github.com/gaowanqi08141999/Moly-OpenAppshots.git
 cd moly/moly-share
 chmod +x install.sh && ./install.sh
 
