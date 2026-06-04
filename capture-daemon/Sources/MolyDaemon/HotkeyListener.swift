@@ -30,11 +30,12 @@ final class HotkeyListener: @unchecked Sendable {
         guard !isRunning else { return }
         isRunning = true
 
-        let opts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary
-        guard AXIsProcessTrustedWithOptions(opts) else {
+        // Check without prompting first (for logging)
+        let checkOpts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): false] as CFDictionary
+        let alreadyTrusted = AXIsProcessTrustedWithOptions(checkOpts)
+        if !alreadyTrusted {
             print("[HotkeyListener] ⚠️  Accessibility permission not granted.")
-            print("  → System Settings → Privacy & Security → Accessibility → Enable MolyDaemon")
-            return
+            print("  → Attempting to create event tap anyway (will trigger prompt on failure)")
         }
 
         let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
@@ -52,9 +53,15 @@ final class HotkeyListener: @unchecked Sendable {
         )
 
         guard let tap = tap else {
-            print("[HotkeyListener] ⚠️  Failed to create event tap.")
-            let opts2 = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
-            AXIsProcessTrustedWithOptions(opts2)
+            if !alreadyTrusted {
+                // Event tap failed because we're not trusted — prompt user now
+                print("[HotkeyListener] 🔔 Requesting Accessibility permission...")
+                let promptOpts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
+                AXIsProcessTrustedWithOptions(promptOpts)
+                print("[HotkeyListener] 💡 After granting, restart the daemon or wait for KeepAlive restart.")
+            } else {
+                print("[HotkeyListener] ⚠️  Failed to create event tap even though trusted.")
+            }
             return
         }
 
