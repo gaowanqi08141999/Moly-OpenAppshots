@@ -320,7 +320,7 @@ final class IPCServer {
         let fullPath = parts[1]
 
         let pathParts = fullPath.components(separatedBy: "?")
-        let path = pathParts[0]
+        let path = pathParts[0].removingPercentEncoding ?? pathParts[0]
         var query: [String: String] = [:]
 
         if pathParts.count > 1 {
