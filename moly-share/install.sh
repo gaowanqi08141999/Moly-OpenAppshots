@@ -63,6 +63,8 @@ if [[ -f "$DAEMON_BIN" ]]; then
     # Pre-built binary included
     cp "$DAEMON_BIN" "$INSTALL_DIR/bin/molyd"
     chmod +x "$INSTALL_DIR/bin/molyd"
+    # Permanent ad-hoc signature — prevents macOS from revoking permissions on upgrade
+    codesign --force --sign - "$INSTALL_DIR/bin/molyd" 2>/dev/null || true
     print_step "Installed pre-built binary."
 else
     # Need to compile
@@ -79,6 +81,7 @@ else
     swift build -c release
     cp ".build/release/MolyDaemon" "$INSTALL_DIR/bin/molyd"
     chmod +x "$INSTALL_DIR/bin/molyd"
+    codesign --force --sign - "$INSTALL_DIR/bin/molyd" 2>/dev/null || true
 fi
 
 # Add to PATH if not already

@@ -10,6 +10,7 @@ install: build
 	@mkdir -p ~/.moly/bin
 	@cp $(BINARY) ~/.moly/bin/molyd
 	@chmod +x ~/.moly/bin/molyd
+	@codesign --force --sign - ~/.moly/bin/molyd 2>/dev/null || true
 	@cp Sources/MolyNotify/notify.js ~/.moly/ 2>/dev/null || true
 	@cp Sources/MolyNotify/flash.js ~/.moly/ 2>/dev/null || true
 	@echo "Installed to ~/.moly/bin/molyd"
