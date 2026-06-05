@@ -2,6 +2,12 @@ import Foundation
 
 // MARK: - Entry Point
 
+// ── CLI Mode: --setup → run permission wizard and exit ──
+if CommandLine.arguments.contains("--setup") {
+    _ = SetupHelper.run()
+    exit(0)
+}
+
 print("Moly Daemon v0.1.0")
 print("")
 

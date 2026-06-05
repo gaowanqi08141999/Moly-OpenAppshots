@@ -71,4 +71,9 @@ else:
     print(f"   {warn} Capture failed — daemon may need permissions")
 
 print()
+print()
+print("💡 Quick fix:  ~/.moly/bin/molyd --setup")
+print("   (runs the interactive permission wizard)")
+
+print()
 print("=== Done ===")

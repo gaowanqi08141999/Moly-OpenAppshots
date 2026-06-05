@@ -192,47 +192,29 @@ else
     print_warn "Daemon may need permissions first. See below."
 fi
 
-# ── Permissions reminder ──
+# ── Permission Setup (interactive wizard) ──
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo -e "${GREEN}Installation complete!${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "You MUST grant these permissions (one-time setup):"
+echo "Now running the ONE-TIME permission setup wizard..."
 echo ""
-echo "1. Screen Recording:"
-echo "   System Settings → Privacy & Security → Screen Recording"
-echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/molyd → Open → Toggle ON"
-echo ""
-echo "2. Accessibility:"
-echo "   System Settings → Privacy & Security → Accessibility"
-echo "   → + → ⌘⇧G → ${INSTALL_DIR}/bin/molyd → Open → Toggle ON"
-echo ""
-echo "3. Restart the daemon after granting permissions:"
-echo "   killall molyd; ${INSTALL_DIR}/bin/molyd &"
+
+# Run the setup wizard
+"$INSTALL_DIR/bin/molyd" --setup
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${GREEN}Hotkey is ready!${NC}"
+echo -e "${GREEN}All set!${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "Press ⌃⌥⌘Space to capture any window."
-echo "The screenshot PNG is automatically copied to your clipboard."
+echo "Hotkey: ⌃⌥⌘Space — capture any window."
+echo "Verify: cd capture-daemon && make doctor"
 echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${GREEN}Optional: Chrome Accessibility${NC}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "For web pages in Google Chrome, also enable Chrome in Accessibility:"
-echo "   System Settings → Privacy & Security → Accessibility"
-echo "   → + → Applications → Google Chrome → Open → Toggle ON"
-echo "   Then ⌘Q quit Chrome and reopen."
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "${GREEN}Verify${NC}"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "Verify everything works:"
-echo "   cd capture-daemon && make doctor"
-echo ""
-echo "Then restart your agent and try: 'Analyze my latest screenshot'"
-echo ""
+
+# ── Optional: Chrome reminder ──
+if [[ "$(defaults read com.google.Chrome AXManualAccessibility 2>/dev/null)" == "1" ]]; then
+    echo -e "${GREEN}Chrome AX mode enabled.${NC}"
+    echo "⚠️  Remember: ⌘Q quit Chrome and reopen to activate AX bridge."
+fi
