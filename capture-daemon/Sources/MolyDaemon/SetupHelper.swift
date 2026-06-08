@@ -32,6 +32,9 @@ final class SetupHelper {
         // ── 3. Chrome Accessibility ──
         allOK = setupChromeAccessibility() && allOK
 
+        // ── 4. Electron apps Accessibility ──
+        allOK = setupElectronAppsAccessibility() && allOK
+
         // ── Summary ──
         print("")
         print("──────────────────────────────────────────────────────────────")
@@ -591,6 +594,120 @@ final class SetupHelper {
     }
 
     /// Quick check if a client has Accessibility permission in TCC.
+    // MARK: - Electron Apps Accessibility
+
+    /// Scan /Applications for Electron-based apps and auto-configure their
+    /// Accessibility permissions (TCC entry + Electron preferences).
+    /// Electron apps use the same AX bridge as Chrome — without this, their
+    /// renderer processes expose zero web content to macOS AX API.
+    private static func setupElectronAppsAccessibility() -> Bool {
+        print("┌─ Permission 4/4: Accessibility (Electron Apps)")
+        print("│  Needed for: extracting text from desktop apps built on Electron")
+        print("│  Why: Same as Chrome — Electron renders in sub-processes that")
+        print("│       only expose AX trees when the app has Accessibility permission.")
+
+        let fm = FileManager.default
+        var configured = 0
+
+        // Scan /Applications for Electron-based apps
+        guard let apps = try? fm.contentsOfDirectory(atPath: "/Applications") else {
+            print("│  ⏭️  Cannot scan /Applications")
+            print("└──────────────────────────────────────────────────────────────")
+            return true
+        }
+
+        for item in apps {
+            guard item.hasSuffix(".app") else { continue }
+            let appPath = "/Applications/\(item)"
+            let frameworkPath = "\(appPath)/Contents/Frameworks/Electron Framework.framework"
+
+            guard fm.fileExists(atPath: frameworkPath) else { continue }
+
+            // Found an Electron app
+            if let info = NSDictionary(contentsOfFile: "\(appPath)/Contents/Info.plist"),
+               let bundleID = info["CFBundleIdentifier"] as? String,
+               let appName = info["CFBundleName"] as? String {
+
+                // Skip Chrome (handled separately in step 3)
+                if bundleID.hasPrefix("com.google.Chrome") { continue }
+
+                // Already configured?
+                if checkTCCAccessibility(client: bundleID) {
+                    continue // already done
+                }
+
+                // Auto-grant via TCC
+                if autoGrantChromeAccessibility(bundleID: bundleID, appPath: appPath) {
+                    // Also write Electron preferences
+                    writeElectronAccessibilityPrefs(bundleID: bundleID, appName: appName)
+                    configured += 1
+                    print("│  \(check) \(appName) configured")
+                } else {
+                    print("│  \(cross) \(appName) — TCC write failed, add manually")
+                }
+            }
+        }
+
+        // Set flag on ALL configured Electron apps
+        defaultsWriteElectronFlags()
+
+        if configured > 0 {
+            print("│")
+            print("│  🔴 REQUIRED: ⌘Q quit and reopen each configured app.")
+            print("│     Also launch with: open -a \"AppName\" --args --force-renderer-accessibility")
+            print("│")
+            print("│  \(check) \(configured) Electron app(s) configured")
+        } else {
+            print("│  \(check) All Electron apps already configured, or none found")
+        }
+        print("└──────────────────────────────────────────────────────────────")
+        return true
+    }
+
+    /// Write Electron accessibility preferences for a specific app.
+    private static func writeElectronAccessibilityPrefs(bundleID: String, appName: String) {
+        // Find the app's data directory (Electron uses ~/Library/Application Support/<AppName>/)
+        let appSupport = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/\(appName)")
+
+        // Write NSUserDefaults
+        let defs = Process()
+        defs.launchPath = "/usr/bin/defaults"
+        for key in ["AXManualAccessibility", "AccessibilityEnabled"] {
+            defs.arguments = ["write", bundleID, key, "-bool", "true"]
+            defs.standardOutput = FileHandle.nullDevice; defs.standardError = FileHandle.nullDevice
+            try? defs.run(); defs.waitUntilExit()
+        }
+
+        // Write Electron Preferences JSON
+        let prefsFile = appSupport.appendingPathComponent("Preferences")
+        if var prefs = (try? JSONSerialization.jsonObject(with: Data(contentsOf: prefsFile))) as? [String: Any] {
+            prefs["accessibilitySupportEnabled"] = true
+            if let data = try? JSONSerialization.data(withJSONObject: prefs, options: []) {
+                try? data.write(to: prefsFile)
+            }
+        }
+    }
+
+    /// Write Electron accessibility flags to NSUserDefaults for all known Electron apps.
+    /// This is a belt-and-suspenders approach — write to the defaults domain for
+    /// every Electron bundle ID we know about.
+    private static func defaultsWriteElectronFlags() {
+        let defs = Process()
+        defs.launchPath = "/usr/bin/defaults"
+        for bid in ["global.longbridge.app.desktop",
+                    "com.microsoft.VSCode",
+                    "com.todesktop.230313mzl4w4u92",
+                    "com.tinyspeck.slackmacgap",
+                    "com.hnc.Discord"] {
+            for key in ["AXManualAccessibility", "AccessibilityEnabled"] {
+                defs.arguments = ["write", bid, key, "-bool", "true"]
+                defs.standardOutput = FileHandle.nullDevice; defs.standardError = FileHandle.nullDevice
+                try? defs.run(); defs.waitUntilExit()
+            }
+        }
+    }
+
     private static func checkTCCAccessibility(client: String) -> Bool {
         let tccDB = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db").path
