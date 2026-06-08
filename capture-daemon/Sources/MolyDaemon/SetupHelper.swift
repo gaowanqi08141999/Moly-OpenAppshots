@@ -64,46 +64,30 @@ final class SetupHelper {
             return false
         }
 
-        // ⚠️  CGEvent tap is NOT reliable when running from Terminal:
-        // Terminal.app inherits its Accessibility permission to child processes,
-        // so tapCreate succeeds even though molyd has NO TCC entry.
-        // The ONLY definitive check is: does this binary have its own TCC entry?
-        let hasTCC = checkOwnAccessibilityTCC(binPath: binPath)
-
-        if hasTCC {
-            // Also verify with tap (belt and suspenders)
-            let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-            let tap = CGEvent.tapCreate(
-                tap: .cgSessionEventTap, place: .headInsertEventTap,
-                options: .defaultTap, eventsOfInterest: eventMask,
-                callback: { _, _, event, _ in Unmanaged.passRetained(event) },
-                userInfo: nil
-            )
-            if let tap = tap {
-                CFMachPortInvalidate(tap)
-                print("│  \(check) Already granted (TCC entry + tap verified)")
-                print("└──────────────────────────────────────────────────────────────")
-                return true
-            }
-            // Tap failed but TCC exists — unusual, maybe hash mismatch
-            print("│  \(arrow) TCC entry exists but tap failed. Binary hash may have changed.")
-        } else {
-            print("│  \(cross) No TCC Accessibility entry for this binary")
-            print("│")
-            print("│  ⚠️  If daemon runs from Terminal, it appears to work because")
-            print("│     Terminal inherits its own Accessibility permission.")
-            print("│     But after reboot (LaunchAgent / launchd), it will FAIL.")
+        // Check TCC database (definitive check — unaffected by Terminal inheritance)
+        if checkOwnAccessibilityTCC(binPath: binPath) {
+            print("│  \(check) Already granted (TCC entry + hash verified)")
+            print("└──────────────────────────────────────────────────────────────")
+            return true
         }
 
-        // Either no TCC entry, or tap failed — guide user
+        // Try auto-grant: write CDHash-based csreq to TCC
+        print("│  \(arrow) Attempting automatic TCC registration...")
+        if autoGrantMolydAccessibility(binPath: binPath) {
+            print("│  \(check) TCC entry created for current binary hash")
+            print("│  💡 Run 'molyd --setup' again after every rebuild.")
+            print("└──────────────────────────────────────────────────────────────")
+            return true
+        }
+
+        // Auto-grant failed — guide user manually
+        print("│  \(cross) Could not auto-register. Please add manually:")
         print("│")
         print("│  ┌─────────────────────────────────────────────────────────┐")
-        print("│  │  STEP 1: System Settings will open to Accessibility    │")
-        print("│  │  STEP 2: Click [+] at the bottom of the list           │")
-        print("│  │  STEP 3: Press ⌘⇧G, paste this path, click Open:      │")
-        print("│  │          \(binPath)")
-        print("│  │  STEP 4: Make sure the switch next to molyd is ON ✅    │")
-        print("│  │  STEP 5: Press Enter in this terminal to continue     │")
+        print("│  │  System Settings will open to Accessibility            │")
+        print("│  │  → Click [+] → ⌘⇧G → paste:                           │")
+        print("│  │    \(binPath)")
+        print("│  │  → Open → Toggle ON ✅ → Press Enter here             │")
         print("│  └─────────────────────────────────────────────────────────┘")
         print("│")
 
@@ -112,20 +96,83 @@ final class SetupHelper {
         openTask.arguments = ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]
         try? openTask.run()
 
-        print("│  Press Enter after you've enabled molyd in Accessibility...")
+        print("│  Press Enter after enabling molyd in Accessibility...")
         _ = readLine()
 
-        // Re-check TCC
         if checkOwnAccessibilityTCC(binPath: binPath) {
-            print("│  \(check) TCC entry confirmed. Restart daemon for it to take effect.")
+            print("│  \(check) TCC entry confirmed. Restart daemon to apply.")
             print("└──────────────────────────────────────────────────────────────")
             return true
         }
 
-        print("│  \(cross) TCC entry still not detected. You may need to")
-        print("│     restart and re-run 'molyd --setup'.")
+        print("│  \(cross) Still not detected. Restart and re-run --setup.")
         print("└──────────────────────────────────────────────────────────────")
         return false
+    }
+
+    /// Auto-grant Accessibility to the current molyd binary.
+    /// For ad-hoc signed binaries, TCC uses CDHash-based csreq (type=8).
+    private static func autoGrantMolydAccessibility(binPath: String) -> Bool {
+        guard let cdhashHex = getCurrentCDHash(binPath: binPath),
+              let cdhashBytes = hexToBytes(cdhashHex) else { return false }
+
+        // Build csreq: fade0c00 + len(4) + version(4) + type=8(4) + id_len(4) + cdhash(20)
+        var blob = Data()
+        blob.append(contentsOf: [0xfa, 0xde, 0x0c, 0x00])
+        var totalLen = UInt32(20 + cdhashBytes.count).bigEndian
+        blob.append(Data(bytes: &totalLen, count: 4))
+        var version = UInt32(1).bigEndian; blob.append(Data(bytes: &version, count: 4))
+        var rtype = UInt32(8).bigEndian; blob.append(Data(bytes: &rtype, count: 4))
+        var idLen = UInt32(cdhashBytes.count).bigEndian
+        blob.append(Data(bytes: &idLen, count: 4))
+        blob.append(contentsOf: cdhashBytes)
+
+        // Write to TCC
+        let tccDB = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db").path
+        guard FileManager.default.fileExists(atPath: tccDB) else { return false }
+
+        var db: OpaquePointer?
+        guard sqlite3_open(tccDB, &db) == SQLITE_OK else { return false }
+        defer { sqlite3_close(db) }
+
+        let now = Int(Date().timeIntervalSince1970)
+        var stmt: OpaquePointer?
+
+        // Check existing
+        let checkSQL = "SELECT auth_value FROM access WHERE service='kTCCServiceAccessibility' AND client=?"
+        guard sqlite3_prepare_v2(db, checkSQL, -1, &stmt, nil) == SQLITE_OK else { return false }
+        sqlite3_bind_text(stmt, 1, binPath, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        let exists = sqlite3_step(stmt) == SQLITE_ROW
+        sqlite3_finalize(stmt)
+
+        if exists {
+            let updSQL = "UPDATE access SET auth_value=2, auth_reason=3, csreq=?, last_modified=?, flags=NULL, policy_id=NULL WHERE service='kTCCServiceAccessibility' AND client=?"
+            guard sqlite3_prepare_v2(db, updSQL, -1, &stmt, nil) == SQLITE_OK else { return false }
+            _ = blob.withUnsafeBytes { ptr in sqlite3_bind_blob(stmt, 1, ptr.baseAddress, Int32(blob.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self)) }
+            sqlite3_bind_int64(stmt, 2, Int64(now))
+            sqlite3_bind_text(stmt, 3, binPath, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        } else {
+            let insSQL = "INSERT INTO access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, last_modified) VALUES ('kTCCServiceAccessibility', ?, 1, 2, 3, 1, ?, ?)"
+            guard sqlite3_prepare_v2(db, insSQL, -1, &stmt, nil) == SQLITE_OK else { return false }
+            sqlite3_bind_text(stmt, 1, binPath, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            _ = blob.withUnsafeBytes { ptr in sqlite3_bind_blob(stmt, 2, ptr.baseAddress, Int32(blob.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self)) }
+            sqlite3_bind_int64(stmt, 3, Int64(now))
+        }
+
+        guard sqlite3_step(stmt) == SQLITE_DONE else { sqlite3_finalize(stmt); return false }
+        sqlite3_finalize(stmt)
+
+        // Restart tccd
+        let kickstart = Process()
+        kickstart.launchPath = "/bin/launchctl"
+        kickstart.arguments = ["kickstart", "gui/\(getuid())/com.apple.tccd"]
+        kickstart.standardOutput = FileHandle.nullDevice
+        kickstart.standardError = FileHandle.nullDevice
+        try? kickstart.run()
+        kickstart.waitUntilExit()
+
+        return true
     }
 
     /// Check TCC database for this binary's Accessibility entry.
@@ -304,23 +351,24 @@ final class SetupHelper {
         print("│       Accessibility permission.")
 
         let chromePath = "/Applications/Google Chrome.app"
+        let chromeBundleID = "com.google.Chrome"
         let fm = FileManager.default
 
         guard fm.fileExists(atPath: chromePath) else {
             print("│  ⏭️  Chrome not installed — skipping")
             print("└──────────────────────────────────────────────────────────────")
-            return true  // non-blocking
+            return true
         }
 
-        // Set AXManualAccessibility flag (this is non-destructive and always needed)
+        // Step 1: Set AXManualAccessibility flag (always)
         let defaultsTask = Process()
         defaultsTask.launchPath = "/usr/bin/defaults"
         defaultsTask.arguments = ["write", "com.google.Chrome", "AXManualAccessibility", "-bool", "true"]
         try? defaultsTask.run()
         defaultsTask.waitUntilExit()
 
-        // Check if Chrome already has Accessibility permission in TCC
-        if checkTCCAccessibility(client: "com.google.Chrome") {
+        // Step 2: Check if Chrome already has Accessibility permission
+        if checkTCCAccessibility(client: chromeBundleID) {
             print("│  \(check) Chrome Accessibility already granted")
             print("│  \(check) AXManualAccessibility flag set")
             print("│")
@@ -329,14 +377,26 @@ final class SetupHelper {
             return true
         }
 
-        print("│  \(cross) Chrome not in Accessibility list")
+        // Step 3: Try to auto-add Chrome to TCC (works for codesigned app bundles)
+        print("│  \(arrow) Attempting automatic TCC registration...")
+
+        if autoGrantChromeAccessibility(bundleID: chromeBundleID, appPath: chromePath) {
+            print("│  \(check) Chrome Accessibility TCC entry created")
+            print("│  \(check) AXManualAccessibility flag set")
+            print("│")
+            print("│  🔴 REQUIRED: ⌘Q quit Chrome completely, then reopen it.")
+            print("│     (Chrome only activates AX bridge on startup)")
+            print("└──────────────────────────────────────────────────────────────")
+            return true
+        }
+
+        // Step 4: Auto-grant failed — guide user manually
+        print("│  \(cross) Could not auto-configure. Please add manually:")
         print("│")
         print("│  ┌─────────────────────────────────────────────────────────┐")
-        print("│  │  STEP 1: System Settings will open to Accessibility    │")
-        print("│  │  STEP 2: Click [+] at the bottom of the list           │")
-        print("│  │  STEP 3: Find 'Google Chrome' in Applications          │")
-        print("│  │  STEP 4: Toggle the switch ON ✅                        │")
-        print("│  │  STEP 5: Press Enter in this terminal to continue     │")
+        print("│  │  System Settings will open to Accessibility            │")
+        print("│  │  → Click [+] → Find 'Google Chrome' → Toggle ON ✅     │")
+        print("│  │  → Press Enter when done                              │")
         print("│  └─────────────────────────────────────────────────────────┘")
         print("│")
 
@@ -345,19 +405,99 @@ final class SetupHelper {
         openTask.arguments = ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]
         try? openTask.run()
 
-        print("│  Press Enter after you've enabled Chrome in Accessibility...")
+        print("│  Press Enter after enabling Chrome in Accessibility...")
         _ = readLine()
 
-        if checkTCCAccessibility(client: "com.google.Chrome") {
-            print("│  \(check) Chrome Accessibility granted!")
+        if checkTCCAccessibility(client: chromeBundleID) {
+            print("│  \(check) Chrome Accessibility detected!")
         } else {
-            print("│  \(cross) May need to restart Chrome to take effect.")
+            print("│  \(cross) Not detected. ⌘Q restart Chrome may help.")
         }
-
         print("│")
         print("│  🔴 REQUIRED: ⌘Q quit Chrome completely, then reopen it.")
-        print("│     (Chrome only activates AX bridge on startup)")
         print("└──────────────────────────────────────────────────────────────")
+        return true
+    }
+
+    /// Auto-grant Accessibility to Chrome by writing its codesign requirement
+    /// to the TCC database. Chrome is an Apple-notarized app bundle with a stable
+    /// code signature, so the csreq blob is deterministic.
+    private static func autoGrantChromeAccessibility(bundleID: String, appPath: String) -> Bool {
+        let tccDB = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db").path
+
+        guard FileManager.default.fileExists(atPath: tccDB) else { return false }
+
+        // Get Chrome's designated code requirement
+        let task = Process()
+        task.launchPath = "/usr/bin/codesign"
+        task.arguments = ["-d", "-r", "-", appPath]
+        let pipe = Pipe(); task.standardOutput = pipe; task.standardError = FileHandle.nullDevice
+        try? task.run()
+        task.waitUntilExit()
+
+        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+        // Parse: designated => <requirement text>
+        guard let reqStart = output.range(of: "=> ") else { return false }
+        let reqText = String(output[reqStart.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Compile requirement text → binary blob
+        var requirement: SecRequirement?
+        guard SecRequirementCreateWithString(reqText as CFString, [], &requirement) == errSecSuccess,
+              let req = requirement else { return false }
+
+        var cfData: CFData?
+        guard SecRequirementCopyData(req, [], &cfData) == errSecSuccess,
+              let csreqBlob = cfData as Data? else { return false }
+
+        // Write to TCC
+        var db: OpaquePointer?
+        guard sqlite3_open(tccDB, &db) == SQLITE_OK else { return false }
+        defer { sqlite3_close(db) }
+
+        let now = Int(Date().timeIntervalSince1970)
+
+        // Check existing
+        var stmt: OpaquePointer?
+        let checkSQL = "SELECT auth_value FROM access WHERE service='kTCCServiceAccessibility' AND client=?"
+        guard sqlite3_prepare_v2(db, checkSQL, -1, &stmt, nil) == SQLITE_OK else { return false }
+        sqlite3_bind_text(stmt, 1, bundleID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        let exists = sqlite3_step(stmt) == SQLITE_ROW
+        sqlite3_finalize(stmt)
+
+        if exists {
+            let updSQL = "UPDATE access SET auth_value=2, auth_reason=3, csreq=?, last_modified=? WHERE service='kTCCServiceAccessibility' AND client=?"
+            guard sqlite3_prepare_v2(db, updSQL, -1, &stmt, nil) == SQLITE_OK else { return false }
+            _ = csreqBlob.withUnsafeBytes { ptr in
+                sqlite3_bind_blob(stmt, 1, ptr.baseAddress, Int32(csreqBlob.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            }
+            sqlite3_bind_int64(stmt, 2, Int64(now))
+            sqlite3_bind_text(stmt, 3, bundleID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        } else {
+            let insSQL = "INSERT INTO access (service, client, client_type, auth_value, auth_reason, auth_version, csreq, last_modified) VALUES ('kTCCServiceAccessibility', ?, 0, 2, 3, 1, ?, ?)"
+            guard sqlite3_prepare_v2(db, insSQL, -1, &stmt, nil) == SQLITE_OK else { return false }
+            sqlite3_bind_text(stmt, 1, bundleID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            _ = csreqBlob.withUnsafeBytes { ptr in
+                sqlite3_bind_blob(stmt, 2, ptr.baseAddress, Int32(csreqBlob.count), unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            }
+            sqlite3_bind_int64(stmt, 3, Int64(now))
+        }
+
+        let result = sqlite3_step(stmt)
+        sqlite3_finalize(stmt)
+
+        guard result == SQLITE_DONE else { return false }
+
+        // Restart tccd to pick up changes immediately
+        let kickstart = Process()
+        kickstart.launchPath = "/bin/launchctl"
+        kickstart.arguments = ["kickstart", "gui/\(getuid())/com.apple.tccd"]
+        kickstart.standardOutput = FileHandle.nullDevice
+        kickstart.standardError = FileHandle.nullDevice
+        try? kickstart.run()
+        kickstart.waitUntilExit()
+
         return true
     }
 
@@ -377,6 +517,19 @@ final class SetupHelper {
         let result = sqlite3_step(stmt) == SQLITE_ROW
         sqlite3_finalize(stmt)
         return result
+    }
+
+    private static func hexToBytes(_ hex: String) -> Data? {
+        var data = Data()
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2, limitedBy: hex.endIndex) ?? hex.endIndex
+            guard next > index else { return nil }
+            guard let byte = UInt8(hex[index..<next], radix: 16) else { return nil }
+            data.append(byte)
+            index = next
+        }
+        return data
     }
 }
 

@@ -54,14 +54,21 @@ final class HotkeyListener: @unchecked Sendable {
 
         guard let tap = tap else {
             if !alreadyTrusted {
-                // Event tap failed because we're not trusted — prompt user now
-                print("[HotkeyListener] 🔔 Requesting Accessibility permission...")
-                let promptOpts = [kAXTrustedCheckOptionPrompt.takeRetainedValue(): true] as CFDictionary
-                AXIsProcessTrustedWithOptions(promptOpts)
-                print("[HotkeyListener] 💡 After granting, restart the daemon or wait for KeepAlive restart.")
+                // ⚠️  Do NOT call AXIsProcessTrustedWithOptions(prompt:true) here.
+                // When daemon runs from launchd or a script, the TCC dialog can't
+                // be shown and the call may block indefinitely.
+                // Instead, guide the user to run --setup which handles prompting.
+                print("[HotkeyListener] ⚠️  Accessibility permission NOT granted.")
+                print("[HotkeyListener] → Run: ~/.moly/bin/molyd --setup")
+                print("[HotkeyListener] → Or: System Settings → Privacy → Accessibility → add molyd")
+                print("[HotkeyListener] → Then restart daemon: killall molyd; ~/.moly/bin/molyd &")
             } else {
                 print("[HotkeyListener] ⚠️  Failed to create event tap even though trusted.")
+                print("[HotkeyListener] → Binary hash may have changed. Rerun: molyd --setup")
             }
+            // Don't return — continue running IPC server (capture via API still works)
+            // Only the hotkey won't work until permissions are granted.
+            isRunning = false
             return
         }
 
