@@ -1,13 +1,35 @@
 #!/usr/bin/env python3
-"""Extract moly_path from PNG metadata. Usage: python3 moly_path.py <png_file>"""
-import struct, sys
+"""
+Extract moly_path from PNG metadata.
+
+Returns the snapshot directory path if found, empty string if not.
+Exit code 0 = found, 1 = not found (image re-encoded, or not a Moly PNG).
+
+When moly_path is missing, the agent should fall back to:
+    curl -s 'http://127.0.0.1:19876/snapshots?limit=1'
+
+Usage: python3 moly_path.py <screenshot.png>
+"""
+import struct, sys, os
 
 if len(sys.argv) < 2:
-    print("Usage: python3 moly_path.py <screenshot.png>")
+    print("Usage: python3 moly_path.py <screenshot.png>", file=sys.stderr)
     sys.exit(1)
 
-with open(sys.argv[1], 'rb') as f:
+filepath = sys.argv[1]
+
+with open(filepath, 'rb') as f:
     data = f.read()
+
+# Detect image format
+if data[:8] != b'\x89PNG\r\n\x1a\n':
+    # Not a PNG — likely JPEG (image was re-encoded by an agent/cache).
+    # moly_path is only embedded in the original PNG.
+    print(f"# Not a PNG file ({len(data)} bytes, magic={data[:4].hex()})", file=sys.stderr)
+    print(f"# This image was re-encoded — PNG metadata (tEXt) was lost.", file=sys.stderr)
+    print(f"# Fallback: curl -s 'http://127.0.0.1:19876/snapshots?limit=1'", file=sys.stderr)
+    print("")
+    sys.exit(1)
 
 pos = 8
 while pos < len(data) - 12:
@@ -24,5 +46,8 @@ while pos < len(data) - 12:
         break
     pos += 12 + length
 
-print("")  # not found
+# PNG without moly_path — might be a regular screenshot
+print(f"# PNG without moly_path metadata", file=sys.stderr)
+print(f"# Fallback: curl -s 'http://127.0.0.1:19876/snapshots?limit=1'", file=sys.stderr)
+print("")
 sys.exit(1)

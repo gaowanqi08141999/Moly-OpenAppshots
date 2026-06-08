@@ -19,9 +19,25 @@ final class CaptureEngine: @unchecked Sendable {
 
     /// Capture a specific app by PID (used by hotkey to avoid focus-stealing issues).
     func captureApp(pid: pid_t) async throws -> CaptureResult {
+        // NSRunningApplication(pid:) may return nil for some processes (Chrome renderers, etc).
+        // Fall back to NSWorkspace → ps → process name.
         let frontApp = NSRunningApplication(processIdentifier: pid)
-        let appName = frontApp?.localizedName ?? "Unknown"
-        let bundleID = frontApp?.bundleIdentifier ?? "unknown"
+        let appName: String
+        let bundleID: String
+        if let app = frontApp {
+            appName = app.localizedName ?? resolveProcessName(pid)
+            bundleID = app.bundleIdentifier ?? "unknown"
+        } else {
+            // Chrome main process sometimes doesn't resolve via NSRunningApplication
+            let name = resolveProcessName(pid)
+            appName = name
+            if let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+               name.lowercased().contains("chrome") {
+                bundleID = bid
+            } else {
+                bundleID = resolveBundleID(pid)
+            }
+        }
         let windowInfo = try getFrontmostWindow(pid: pid)
         let windowTitle = windowInfo.title
 
@@ -281,7 +297,6 @@ final class CaptureEngine: @unchecked Sendable {
     /// Safely cast a CFTypeRef to AXUIElement.
     private func castAttribute(_ ref: CFTypeRef?) -> AXUIElement? {
         guard let ref = ref else { return nil }
-        // AXUIElement is toll-free bridged with CFType
         return (ref as! AXUIElement)
     }
 
@@ -289,6 +304,48 @@ final class CaptureEngine: @unchecked Sendable {
     private func stringAttribute(_ ref: CFTypeRef?) -> String? {
         guard let ref = ref else { return nil }
         return ref as? String
+    }
+
+    /// Resolve human-readable app name from PID when NSRunningApplication fails.
+    private func resolveProcessName(_ pid: pid_t) -> String {
+        // Try ps command first
+        let task = Process()
+        task.launchPath = "/bin/ps"
+        task.arguments = ["-p", "\(pid)", "-o", "comm="]
+        let pipe = Pipe(); task.standardOutput = pipe; task.standardError = FileHandle.nullDevice
+        try? task.run(); task.waitUntilExit()
+        if let name = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
+            // "Google Chrome" → "Google Chrome", "Safari" → "Safari"
+            if name == "Google Chrome" || name == "Safari" || name == "Firefox" {
+                return name
+            }
+            return name
+        }
+        // Last resort: CGWindow owner name
+        let opts: CGWindowListOption = [.optionOnScreenOnly]
+        if let list = CGWindowListCopyWindowInfo(opts, kCGNullWindowID) as? [[String: Any]] {
+            for w in list {
+                if let oPID = w[kCGWindowOwnerPID as String] as? pid_t, oPID == pid,
+                   let owner = w[kCGWindowOwnerName as String] as? String {
+                    return owner
+                }
+            }
+        }
+        return "Unknown"
+    }
+
+    private func resolveBundleID(_ pid: pid_t) -> String {
+        // Try mdfind for the process path
+        let task = Process()
+        task.launchPath = "/usr/sbin/lsof"
+        task.arguments = ["-p", "\(pid)", "-Fn"]
+        let pipe = Pipe(); task.standardOutput = pipe; task.standardError = FileHandle.nullDevice
+        try? task.run(); task.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        if out.contains("Google Chrome") || out.contains("Chrome.app") { return "com.google.Chrome" }
+        if out.contains("Safari.app") { return "com.apple.Safari" }
+        return "unknown"
     }
 
     // MARK: - Window Query

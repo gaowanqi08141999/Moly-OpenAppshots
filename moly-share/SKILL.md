@@ -13,7 +13,11 @@ platforms: [macos]
 
 ## 🚨 MANDATORY RULES — READ BEFORE ANY ACTION
 
-1. **If user PASTES a PNG image**: Run `python3 ~/.moly/moly_path.py <path_to_pasted_image>` FIRST. If it returns a directory, `cat` the JSON files there. Do NOT call MCP tools.
+1. **If user PASTES a PNG image**: Run `python3 ~/.moly/moly_path.py <path_to_pasted_image>` FIRST.
+   - If it returns a directory → `cat` the JSON files there. Done.
+   - If it returns empty → the image was **re-encoded** (png→jpeg, cache, etc.) and metadata was lost.
+     → Run `curl -s 'http://127.0.0.1:19876/snapshots?limit=1'` as fallback.
+   - Do NOT loop or retry moly_path.py — it will still be empty on retry.
 
 2. **If user gives a FILE PATH** (e.g. `~/snapshots/.../screenshot.png`): `dirname` it, then `cat $dir/metadata.json` and `cat $dir/accessibility_tree.json`. Done.
 
