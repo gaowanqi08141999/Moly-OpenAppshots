@@ -58,33 +58,44 @@ final class SetupHelper {
         print("┌─ Permission 1/3: Accessibility (molyd)")
         print("│  Needed for: reading window text, global hotkey")
 
-        // CGEvent tap is the definitive test — it fails if the PROCESS
-        // doesn't have its own Accessibility permission (Terminal inheritance
-        // can give false positives via AXIsProcessTrusted alone).
-        let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
-        let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap, place: .headInsertEventTap,
-            options: .defaultTap, eventsOfInterest: eventMask,
-            callback: { _, _, event, _ in Unmanaged.passRetained(event) },
-            userInfo: nil
-        )
-
-        if let tap = tap {
-            CFMachPortInvalidate(tap)
-            print("│  \(check) Already granted")
-            print("└──────────────────────────────────────────────────────────────")
-            return true
-        }
-
-        // Tap failed — not trusted. Open System Settings for manual grant.
-        // (launchd processes can't show TCC dialogs, so the user MUST do this.)
         guard let binPath = Bundle.main.executablePath else {
             print("│  \(cross) Cannot determine binary path")
             print("└──────────────────────────────────────────────────────────────")
             return false
         }
 
-        print("│  \(cross) Not granted")
+        // ⚠️  CGEvent tap is NOT reliable when running from Terminal:
+        // Terminal.app inherits its Accessibility permission to child processes,
+        // so tapCreate succeeds even though molyd has NO TCC entry.
+        // The ONLY definitive check is: does this binary have its own TCC entry?
+        let hasTCC = checkOwnAccessibilityTCC(binPath: binPath)
+
+        if hasTCC {
+            // Also verify with tap (belt and suspenders)
+            let eventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+            let tap = CGEvent.tapCreate(
+                tap: .cgSessionEventTap, place: .headInsertEventTap,
+                options: .defaultTap, eventsOfInterest: eventMask,
+                callback: { _, _, event, _ in Unmanaged.passRetained(event) },
+                userInfo: nil
+            )
+            if let tap = tap {
+                CFMachPortInvalidate(tap)
+                print("│  \(check) Already granted (TCC entry + tap verified)")
+                print("└──────────────────────────────────────────────────────────────")
+                return true
+            }
+            // Tap failed but TCC exists — unusual, maybe hash mismatch
+            print("│  \(arrow) TCC entry exists but tap failed. Binary hash may have changed.")
+        } else {
+            print("│  \(cross) No TCC Accessibility entry for this binary")
+            print("│")
+            print("│  ⚠️  If daemon runs from Terminal, it appears to work because")
+            print("│     Terminal inherits its own Accessibility permission.")
+            print("│     But after reboot (LaunchAgent / launchd), it will FAIL.")
+        }
+
+        // Either no TCC entry, or tap failed — guide user
         print("│")
         print("│  ┌─────────────────────────────────────────────────────────┐")
         print("│  │  STEP 1: System Settings will open to Accessibility    │")
@@ -96,34 +107,94 @@ final class SetupHelper {
         print("│  └─────────────────────────────────────────────────────────┘")
         print("│")
 
-        // Open Accessibility preferences
         let openTask = Process()
         openTask.launchPath = "/usr/bin/open"
         openTask.arguments = ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]
         try? openTask.run()
 
-        // Wait for user to grant permission
         print("│  Press Enter after you've enabled molyd in Accessibility...")
         _ = readLine()
 
-        // Re-test
-        let tap2 = CGEvent.tapCreate(
-            tap: .cgSessionEventTap, place: .headInsertEventTap,
-            options: .defaultTap, eventsOfInterest: eventMask,
-            callback: { _, _, event, _ in Unmanaged.passRetained(event) },
-            userInfo: nil
-        )
-        if let tap2 = tap2 {
-            CFMachPortInvalidate(tap2)
-            print("│  \(check) Permission granted — thank you!")
+        // Re-check TCC
+        if checkOwnAccessibilityTCC(binPath: binPath) {
+            print("│  \(check) TCC entry confirmed. Restart daemon for it to take effect.")
             print("└──────────────────────────────────────────────────────────────")
             return true
         }
 
-        print("│  \(cross) Still not detected. You may need to restart.")
-        print("│     Run '~/.moly/bin/molyd --setup' again after granting.")
+        print("│  \(cross) TCC entry still not detected. You may need to")
+        print("│     restart and re-run 'molyd --setup'.")
         print("└──────────────────────────────────────────────────────────────")
         return false
+    }
+
+    /// Check TCC database for this binary's Accessibility entry.
+    /// Returns true only if the entry exists with auth_value=2 AND the cdhash matches.
+    private static func checkOwnAccessibilityTCC(binPath: String) -> Bool {
+        let tccDB = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/com.apple.TCC/TCC.db").path
+
+        guard FileManager.default.fileExists(atPath: tccDB) else { return false }
+
+        var db: OpaquePointer?
+        guard sqlite3_open(tccDB, &db) == SQLITE_OK else { return false }
+        defer { sqlite3_close(db) }
+
+        // Check if entry exists with auth=2
+        var stmt: OpaquePointer?
+        let sql = "SELECT csreq FROM access WHERE service='kTCCServiceAccessibility' AND client=? AND auth_value=2"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+
+        sqlite3_bind_text(stmt, 1, binPath, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+
+        guard sqlite3_step(stmt) == SQLITE_ROW else {
+            sqlite3_finalize(stmt)
+            return false
+        }
+
+        // Verify cdhash matches current binary
+        if let blobPtr = sqlite3_column_blob(stmt, 0) {
+            let blobLen = sqlite3_column_bytes(stmt, 0)
+            let blob = Data(bytes: blobPtr, count: Int(blobLen))
+
+            // Parse csreq: magic(4) + len(4) + version(4) + type(4) + id_len(4) + id
+            if blobLen > 24 {
+                let _ /* type */ = blob.withUnsafeBytes { $0.load(fromByteOffset: 12, as: UInt32.self) }
+                let rawIdLen = blob.withUnsafeBytes { $0.load(fromByteOffset: 16, as: UInt32.self) }
+                let idLen = UInt32(bigEndian: rawIdLen)
+                if Int(idLen) <= blobLen - 20 {
+                    let storedCDHash = blob.subdata(in: 20..<20+Int(idLen)).hexString()
+
+                    // Get current binary cdhash
+                    if let currentCDHash = getCurrentCDHash(binPath: binPath),
+                       storedCDHash == currentCDHash {
+                        sqlite3_finalize(stmt)
+                        return true
+                    }
+                }
+            }
+        }
+
+        sqlite3_finalize(stmt)
+        return false
+    }
+
+    private static func getCurrentCDHash(binPath: String) -> String? {
+        let task = Process()
+        task.launchPath = "/usr/bin/codesign"
+        task.arguments = ["-d", "-r", "-", binPath]
+        let pipe = Pipe(); task.standardOutput = pipe; task.standardError = FileHandle.nullDevice
+        try? task.run()
+        task.waitUntilExit()
+
+        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        if let range = output.range(of: "cdhash H\"") {
+            let start = range.upperBound
+            if let end = output[start...].firstIndex(of: "\"") {
+                return String(output[start..<end])
+            }
+        }
+        return nil
     }
 
     // MARK: - Screen Recording (molyd)
@@ -306,5 +377,13 @@ final class SetupHelper {
         let result = sqlite3_step(stmt) == SQLITE_ROW
         sqlite3_finalize(stmt)
         return result
+    }
+}
+
+// MARK: - Data Extension
+
+extension Data {
+    func hexString() -> String {
+        return map { String(format: "%02x", $0) }.joined()
     }
 }

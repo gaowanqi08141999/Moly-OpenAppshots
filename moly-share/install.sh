@@ -121,30 +121,118 @@ if [[ -f "${SCRIPT_DIR}/moly_mcp.py" ]]; then
 fi
 
 # ── Install skill files ──
-print_step "Installing skill files..."
+# Deploy SKILL.md to all detected AI agents so they auto-discover Moly usage rules.
+# Each agent has its own skill directory convention — we handle them all here.
+print_step "Installing skill files to all detected AI agents..."
 
-mkdir -p "$HERMES_SKILLS_DIR"
-cp "${SCRIPT_DIR}/SKILL.md" "$HERMES_SKILLS_DIR/"
+# Canonical location (always installed)
+MOLY_CANONICAL_SKILL_DIR="$INSTALL_DIR/skills/moly"
+mkdir -p "$MOLY_CANONICAL_SKILL_DIR"
+cp "${SCRIPT_DIR}/SKILL.md" "$MOLY_CANONICAL_SKILL_DIR/SKILL.md"
 
-# Also copy to Moly skills dir if it exists
-MOLY_SKILLS_DIR="$HOME/.moly/skills/moly"
-if [[ -d "$HOME/.moly/skills" ]]; then
-    mkdir -p "$MOLY_SKILLS_DIR"
-    cp "${SCRIPT_DIR}/SKILL.md" "$MOLY_SKILLS_DIR/"
+# Helper: deploy skill to a target directory
+deploy_skill() {
+    local target_dir="$1"
+    local agent_name="$2"
+    mkdir -p "$target_dir"
+    cp "${SCRIPT_DIR}/SKILL.md" "$target_dir/SKILL.md"
+    print_step "  $agent_name → $target_dir/SKILL.md"
+}
+
+# Detect and deploy to each agent
+AGENTS_CONFIGURED=()
+
+# Hermes
+if [[ -d "$HOME/.hermes/skills" ]]; then
+    deploy_skill "$HOME/.hermes/skills/appshot" "Hermes"
+    AGENTS_CONFIGURED+=("Hermes")
 fi
 
-# ── Configure Hermes MCP (if Hermes is installed) ──
+# Codex / WorkBuddy
+if [[ -d "$HOME/.codex/skills" ]]; then
+    deploy_skill "$HOME/.codex/skills/moly" "Codex"
+    AGENTS_CONFIGURED+=("Codex")
+fi
+
+# OpenClaw
+if [[ -d "$HOME/.openclaw/skills" ]]; then
+    deploy_skill "$HOME/.openclaw/skills/moly" "OpenClaw"
+    AGENTS_CONFIGURED+=("OpenClaw")
+fi
+
+# Claude Code — deploy to project's .claude/skills/ so Claude auto-discovers it
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CLAUDE_SKILLS_DIR="${PROJECT_ROOT}/.claude/skills/moly"
+if [[ -d "$(dirname "$CLAUDE_SKILLS_DIR")" ]] || true; then
+    # Always create — even if .claude/ doesn't exist yet, because user might use Claude Code later
+    mkdir -p "$CLAUDE_SKILLS_DIR"
+    cp "${SCRIPT_DIR}/SKILL.md" "$CLAUDE_SKILLS_DIR/SKILL.md"
+    print_step "  Claude Code (project) → $CLAUDE_SKILLS_DIR/SKILL.md"
+    AGENTS_CONFIGURED+=("Claude Code")
+fi
+
+# Also deploy to ~/.claude/skills/ for global Claude Code access
+if [[ -d "$HOME/.claude/skills" ]]; then
+    deploy_skill "$HOME/.claude/skills/moly" "Claude Code (global)"
+elif [[ -d "$HOME/.claude" ]]; then
+    mkdir -p "$HOME/.claude/skills/moly"
+    cp "${SCRIPT_DIR}/SKILL.md" "$HOME/.claude/skills/moly/SKILL.md"
+    print_step "  Claude Code (global) → ~/.claude/skills/moly/SKILL.md"
+fi
+
+if [[ ${#AGENTS_CONFIGURED[@]} -gt 0 ]]; then
+    print_step "Skills deployed for: ${AGENTS_CONFIGURED[*]}"
+else
+    print_warn "No known AI agents detected. Skill installed to $MOLY_CANONICAL_SKILL_DIR only."
+    print_warn "Your agent may need manual skill configuration."
+fi
+
+# ── Configure MCP servers for each agent ──
+print_step "Configuring MCP servers..."
+
+# Hermes MCP
 if [[ -f "$HOME/.hermes/config.yaml" ]]; then
-    print_step "Configuring Hermes MCP..."
     if grep -q "moly" "$HOME/.hermes/config.yaml" 2>/dev/null; then
-        print_step "Hermes MCP already configured."
+        print_step "  Hermes MCP already configured."
     elif command -v hermes &> /dev/null; then
         hermes mcp add moly -- python3 "$INSTALL_DIR/moly_mcp.py" 2>/dev/null && \
-            print_step "Hermes MCP configured via 'hermes mcp add'." || \
-            print_warn "Run manually: hermes mcp add moly -- python3 $INSTALL_DIR/moly_mcp.py"
+            print_step "  Hermes MCP configured via 'hermes mcp add'." || \
+            print_warn "  Hermes: run 'hermes mcp add moly -- python3 $INSTALL_DIR/moly_mcp.py'"
     else
-        print_warn "Hermes CLI not in PATH. Run manually later:"
-        print_warn "  hermes mcp add moly -- python3 $INSTALL_DIR/moly_mcp.py"
+        print_warn "  Hermes CLI not in PATH. Add manually later:"
+        print_warn "    hermes mcp add moly -- python3 $INSTALL_DIR/moly_mcp.py"
+    fi
+fi
+
+# OpenClaw MCP
+if [[ -f "$HOME/.openclaw/openclaw.json" ]]; then
+    if grep -q "moly" "$HOME/.openclaw/openclaw.json" 2>/dev/null; then
+        print_step "  OpenClaw MCP already configured."
+    elif command -v openclaw &> /dev/null; then
+        openclaw mcp add moly -- python3 "$INSTALL_DIR/moly_mcp.py" 2>/dev/null && \
+            print_step "  OpenClaw MCP configured via 'openclaw mcp add'." || \
+            print_warn "  OpenClaw: run 'openclaw mcp add moly -- python3 $INSTALL_DIR/moly_mcp.py'"
+    fi
+fi
+
+# Claude Code MCP — if Claude Desktop config exists
+CLAUDE_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+if [[ -f "$CLAUDE_CONFIG" ]]; then
+    if command -v python3 &> /dev/null; then
+        python3 -c "
+import json, sys
+try:
+    with open('$CLAUDE_CONFIG') as f: cfg = json.load(f)
+    servers = cfg.setdefault('mcpServers', {})
+    if 'moly' not in servers:
+        servers['moly'] = {'command': 'python3', 'args': ['$INSTALL_DIR/moly_mcp.py']}
+        with open('$CLAUDE_CONFIG', 'w') as f: json.dump(cfg, f, indent=2)
+        print('  Claude Desktop MCP configured.')
+    else:
+        print('  Claude Desktop MCP already configured.')
+except Exception as e:
+    print(f'  Claude Desktop MCP setup skipped: {e}')
+" 2>/dev/null
     fi
 fi
 
