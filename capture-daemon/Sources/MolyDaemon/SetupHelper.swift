@@ -360,17 +360,22 @@ final class SetupHelper {
             return true
         }
 
-        // Step 1: Set AXManualAccessibility flag (always)
+        // Step 1: Set AXManualAccessibility flag + Chrome policy + preferences
         let defaultsTask = Process()
         defaultsTask.launchPath = "/usr/bin/defaults"
         defaultsTask.arguments = ["write", "com.google.Chrome", "AXManualAccessibility", "-bool", "true"]
         try? defaultsTask.run()
         defaultsTask.waitUntilExit()
 
+        // Chrome managed policy (AccessibilityEnabled)
+        writeChromePolicy()
+        // Chrome internal preferences (accessibility.screenReader)
+        writeChromePreferences()
+
         // Step 2: Check if Chrome already has Accessibility permission
         if checkTCCAccessibility(client: chromeBundleID) {
             print("│  \(check) Chrome Accessibility already granted")
-            print("│  \(check) AXManualAccessibility flag set")
+            print("│  \(check) AXManualAccessibility + policy + prefs set")
             print("│")
             print("│  ⚠️  If you haven't ⌘Q quit + reopened Chrome yet, do it now!")
             print("└──────────────────────────────────────────────────────────────")
@@ -499,6 +504,47 @@ final class SetupHelper {
         kickstart.waitUntilExit()
 
         return true
+    }
+
+    /// Write Chrome managed policy to force accessibility on all pages.
+    private static func writeChromePolicy() {
+        let policyDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Google/Chrome")
+        try? FileManager.default.createDirectory(at: policyDir, withIntermediateDirectories: true)
+
+        let policyFile = policyDir.appendingPathComponent("Policy.json")
+        var policy: [String: Any] = ["AccessibilityEnabled": true]
+
+        // Merge with existing policy if any
+        if let data = try? Data(contentsOf: policyFile),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for (k, v) in existing { policy[k] = v }
+        }
+
+        if let data = try? JSONSerialization.data(withJSONObject: policy, options: .prettyPrinted) {
+            try? data.write(to: policyFile)
+        }
+    }
+
+    /// Write Chrome internal preferences to enable screen-reader accessibility mode.
+    private static func writeChromePreferences() {
+        let prefsDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Google/Chrome/Default")
+        let prefsFile = prefsDir.appendingPathComponent("Preferences")
+
+        guard var prefs = (try? JSONSerialization.jsonObject(with: Data(contentsOf: prefsFile))) as? [String: Any] else {
+            return
+        }
+
+        var acc = prefs["accessibility"] as? [String: Any] ?? [:]
+        acc["enabled"] = true
+        acc["imageLabels"] = true
+        acc["screenReader"] = true
+        prefs["accessibility"] = acc
+
+        if let data = try? JSONSerialization.data(withJSONObject: prefs, options: []) {
+            try? data.write(to: prefsFile)
+        }
     }
 
     /// Quick check if a client has Accessibility permission in TCC.

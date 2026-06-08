@@ -234,10 +234,10 @@ Default: text-only. Only request image/AX tree when truly needed.
 | Problem | Cause | Fix |
 |---------|-------|-----|
 | Daemon unreachable | Not running or port blocked | `curl http://127.0.0.1:19876/health`; `lsof -i :19876`; `killall molyd; ~/.moly/bin/molyd &` |
-| Empty capture / timeout | Screen Recording permission missing | `~/.moly/bin/molyd --setup` (step 2) or manually: System Settings → Privacy → Screen Recording → add `~/.moly/bin/molyd` |
-| Hotkey not working | Accessibility permission missing or binary hash changed | `curl http://127.0.0.1:19876/axdiag` → check `ax_trusted`. If false: `~/.moly/bin/molyd --setup` (step 1). If daemon runs via LaunchAgent, it needs its OWN TCC entry (not inherited from Terminal). |
-| **AX tree empty (text=0)** | DAEMON has no Accessibility permission → cannot read ANY app | Run `~/.moly/bin/molyd --setup` step 1. Confirm with `curl http://127.0.0.1:19876/axdiag` → `ax_trusted` must be `true`. |
-| **AX tree has text but Chrome pages are sparse** | Chrome.app NOT in Accessibility list → AX bridge not activated | Run `~/.moly/bin/molyd --setup` step 3. Then ⌘Q quit Chrome and reopen. Chrome only activates AX on startup. |
+| Empty capture / timeout | Screen Recording permission missing | `~/.moly/bin/molyd --setup` (step 2). All three permissions handled automatically now. |
+| Hotkey not working | Accessibility permission missing or binary hash changed | `curl http://127.0.0.1:19876/axdiag` → check `ax_trusted`. If false: `~/.moly/bin/molyd --setup` (step 1 auto-grants). |
+| **AX tree empty (text=0)** | DAEMON has no Accessibility permission | Run `~/.moly/bin/molyd --setup`. Confirm with `curl http://127.0.0.1:19876/axdiag`. |
+| **AX tree only has browser chrome (no web text)** | Chrome's Accessibility bridge not activated | 1) Check `molyd --setup` passes all 3 steps. 2) ⌘Q quit Chrome completely, reopen. 3) Chrome's AX bridge only exposes web content when the page uses semantic HTML/ARIA. **Modern SPAs (React/Vue) may not expose their dynamic content to macOS AX API at all.** |
+| **Web page content missing even with all permissions OK** | Page is a JS-heavy SPA (B站, YouTube, Twitter, etc.) | **Known limitation:** Chrome/macOS AX API cannot extract dynamically rendered React/Vue component trees. Workarounds: (a) Use Safari instead — Safari has better AX integration, (b) Use the page's public API (B站 API, YouTube API), (c) Use `include_image=true` for visual analysis. **Do NOT retry — this is not a permission issue.** |
 | API returns 404 | Wrong endpoint path | Use `/snapshots`, not `/appshots` or `/list` |
-| Web page text still missing after all fixes | Dynamic JS-rendered content may not expose AX (B站, YouTube etc.) | AX bridge limitation for some SPAs. Fallback: use B站 API, playwright, or screenshot visual analysis. |
 | `ax_trusted: true` but hotkey still doesn't work | Daemon started BEFORE permissions were granted | Restart daemon: `killall molyd; ~/.moly/bin/molyd &` |
