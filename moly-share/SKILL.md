@@ -62,12 +62,21 @@ This eliminates ALL MCP/HTTP round-trips — reading local files takes milliseco
 
 - macOS 14.0+
 - Daemon running on `http://127.0.0.1:19876`
-- Screen Recording + Accessibility permissions granted to **the running daemon binary path**
+- **One-time permission setup:** `~/.moly/bin/molyd --setup` (interactive wizard)
+- Screen Recording + Accessibility permissions granted to **the running daemon binary**
+- For Chrome web pages: Google Chrome must also be in Accessibility list + ⌘Q restart
 - Hotkey: ⌃⌥⌘Space (built into daemon, no Shortcuts.app needed)
 
-**CRITICAL: Permissions are bound to the binary path.** If you start the daemon from `.build/debug/MolyDaemon`, permissions granted to `~/bin/molyd` will NOT apply. Always start daemon from the same path that was authorized.
+**CRITICAL — macOS TCC permission model:**
 
-Verify daemon: `curl -s http://127.0.0.1:19876/health` → `{"status":"ok"}`
+Permissions are bound to both **binary path** AND **binary hash** (codesign identity). This means:
+
+1. *Every rebuild* (`make install`) changes the hash → macOS revokes permissions → you MUST re-run `~/.moly/bin/molyd --setup`
+2. `AXIsProcessTrusted()` can lie — when daemon runs from Terminal, it **inherits** Terminal.app's Accessibility permission, so it reports `true` even though the daemon binary itself has no TCC entry. The definitive test is a CGEvent tap (which `--setup` uses).
+3. When daemon starts via **LaunchAgent** (launchd), it has NO TCC inheritance. The binary must have its OWN Accessibility entry in the TCC database.
+4. After granting permissions in System Settings, **restart the daemon** — permissions are only checked at process start.
+
+**Quick check:** `curl -s http://127.0.0.1:19876/axdiag` — `ax_trusted: true` means the HOTKEY works. `ax_test` shows whether a focused window's AX tree is readable.
 
 ## How It Works
 
@@ -225,9 +234,10 @@ Default: text-only. Only request image/AX tree when truly needed.
 | Problem | Cause | Fix |
 |---------|-------|-----|
 | Daemon unreachable | Not running or port blocked | `curl http://127.0.0.1:19876/health`; `lsof -i :19876`; `killall molyd; ~/.moly/bin/molyd &` |
-| Empty capture / timeout | Screen Recording permission missing | System Settings → Privacy → Screen Recording → add `~/.moly/bin/molyd` |
-| Hotkey not working | Accessibility permission missing | System Settings → Privacy → Accessibility → add `~/.moly/bin/molyd` |
-| **AX tree empty (text=0)** | **#1 cause: Accessibility permission not granted to daemon binary** | **Re-check System Settings → Privacy → Accessibility. The binary path must be `~/.moly/bin/molyd`.** |
+| Empty capture / timeout | Screen Recording permission missing | `~/.moly/bin/molyd --setup` (step 2) or manually: System Settings → Privacy → Screen Recording → add `~/.moly/bin/molyd` |
+| Hotkey not working | Accessibility permission missing or binary hash changed | `curl http://127.0.0.1:19876/axdiag` → check `ax_trusted`. If false: `~/.moly/bin/molyd --setup` (step 1). If daemon runs via LaunchAgent, it needs its OWN TCC entry (not inherited from Terminal). |
+| **AX tree empty (text=0)** | DAEMON has no Accessibility permission → cannot read ANY app | Run `~/.moly/bin/molyd --setup` step 1. Confirm with `curl http://127.0.0.1:19876/axdiag` → `ax_trusted` must be `true`. |
+| **AX tree has text but Chrome pages are sparse** | Chrome.app NOT in Accessibility list → AX bridge not activated | Run `~/.moly/bin/molyd --setup` step 3. Then ⌘Q quit Chrome and reopen. Chrome only activates AX on startup. |
 | API returns 404 | Wrong endpoint path | Use `/snapshots`, not `/appshots` or `/list` |
-| Web page text missing | Chrome/Web AX limitation | Normal. Web content is not exposed to macOS Accessibility API. Use screenshot image instead. |
-| Stuck in retry loop | Trying non-existent endpoints | Stop. Verify daemon with `/health`. Then use `/snapshots?limit=1` exactly. |
+| Web page text still missing after all fixes | Dynamic JS-rendered content may not expose AX (B站, YouTube etc.) | AX bridge limitation for some SPAs. Fallback: use B站 API, playwright, or screenshot visual analysis. |
+| `ax_trusted: true` but hotkey still doesn't work | Daemon started BEFORE permissions were granted | Restart daemon: `killall molyd; ~/.moly/bin/molyd &` |

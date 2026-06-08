@@ -77,19 +77,28 @@ git clone https://github.com/gaowanqi08141999/Moly-OpenAppshots.git
 cd moly/moly-share
 chmod +x install.sh && ./install.sh
 
-# 2. 授予权限（必须，一次性操作）
-#    系统设置 → 隐私与安全性
-#    → 屏幕录制  → + → ⌘⇧G → ~/.moly/bin/molyd
-#    → 辅助功能  → + → ⌘⇧G → ~/.moly/bin/molyd
+# 2. 运行一次性权限设置向导
+~/.moly/bin/molyd --setup
+#    → 依次打开系统设置，逐步引导你授予三项权限
+#    → 涵盖：辅助功能 (molyd)、屏幕录制 (molyd)、辅助功能 (Google Chrome)
 
-# 3. 重启 daemon
+# 3. 重启 Chrome（如果你使用它）
+#    ⌘Q 完全退出 Chrome，再重新打开 — Chrome 只在启动时激活 AX 桥接
+
+# 4. 重启 daemon（授权后必须重启）
 killall molyd; sleep 1; ~/.moly/bin/molyd &
 
-# 4. 验证
+# 5. 验证
 cd ../capture-daemon && make doctor
-# → ✅ Daemon running / ✅ AX trusted / ✅ Capture OK
+# → ✅ Daemon 运行中 / ✅ AX 已授权 / ✅ 截图正常
 
-# 5. 配置智能体的 MCP 服务器（一次性，见下文）
+# 6. 配置智能体的 MCP 服务器（一次性，见下文）
+
+# 7. 准备就绪！在任意窗口按 ⌃⌥⌘Space，粘贴 (⌘V) 给 Agent
+
+# 💡 每次重新编译/更新二进制后，需要重新运行：
+#    ~/.moly/bin/molyd --setup
+#    （macOS TCC 将权限绑定到二进制哈希值 — 每次重编译都会使旧授权失效。）
 
 # 6. 搞定！在任意窗口按 ⌃⌥⌘Space，⌘V 粘贴给智能体
 ```
@@ -124,10 +133,12 @@ mcp_servers:
 
 ### Chrome 用户
 
-Chrome 的网页内容需要额外授权辅助功能：
+Chrome 的网页内容需要额外授权辅助功能（Chrome 把网页渲染在子进程中，必须 Chrome **本体**有辅助功能权限才能激活 AX 桥接）。
 
-- 系统设置 → 隐私与安全性 → 辅助功能 → **+** → Google Chrome → 勾选
-- ⌘Q 完全退出 Chrome，重新打开（激活 AX 桥接必须重启）
+`molyd --setup` 第 3 步会自动处理。授权后：
+
+- ⌘Q 完全退出 Chrome，重新打开（AX 桥接只在启动时激活）
+- 验证：`AXManualAccessibility` 标志位会自动通过 `defaults write` 设置
 
 ## 工具列表
 

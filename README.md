@@ -77,21 +77,30 @@ git clone https://github.com/gaowanqi08141999/Moly-OpenAppshots.git
 cd moly/moly-share
 chmod +x install.sh && ./install.sh
 
-# 2. Grant permissions (mandatory, one-time)
-#    System Settings → Privacy & Security
-#    → Screen Recording  → + → ⌘⇧G → ~/.moly/bin/molyd
-#    → Accessibility     → + → ⌘⇧G → ~/.moly/bin/molyd
+# 2. Run the one-time permission setup wizard
+~/.moly/bin/molyd --setup
+#    → Opens System Settings for each permission, guides you step-by-step
+#    → Handles: Accessibility (molyd), Screen Recording (molyd),
+#               Accessibility (Google Chrome)
 
-# 3. Restart daemon
+# 3. Restart Chrome (if you use it)
+#    ⌘Q quit Chrome completely, then reopen — Chrome only activates
+#    its AX bridge on startup
+
+# 4. Restart daemon (required after granting new permissions)
 killall molyd; sleep 1; ~/.moly/bin/molyd &
 
-# 4. Verify
+# 5. Verify
 cd ../capture-daemon && make doctor
 # → ✅ Daemon running / ✅ AX trusted / ✅ Capture OK
 
-# 5. Configure your agent's MCP server (one-time, see below)
+# 6. Configure your agent's MCP server (one-time, see below)
 
-# 6. Ready! Press ⌃⌥⌘Space on any window, paste (⌘V) to your agent
+# 7. Ready! Press ⌃⌥⌘Space on any window, paste (⌘V) to your agent
+
+# 💡 If you ever rebuild or update the binary, re-run:
+#    ~/.moly/bin/molyd --setup
+#    (macOS TCC binds permissions to binary hash — every rebuild invalidates old grants.)
 ```
 
 ### Agent Configuration
@@ -124,10 +133,12 @@ See [MCP_SETUP.md](moly-share/MCP_SETUP.md) for all platforms.
 
 ### Chrome Users
 
-For web page text extraction, Chrome needs Accessibility permission too:
+For web page text extraction in Chrome, Accessibility permission must be granted to **Chrome itself** (not just molyd). Chrome renders web content in sub-processes — the AX bridge only activates when Chrome detects an accessibility client. 
 
-- System Settings → Privacy → Accessibility → **+** → Google Chrome → toggle ON
-- ⌘Q quit Chrome and reopen (required to activate the AX bridge)
+`molyd --setup` handles this automatically (step 3 of the wizard). After granting:
+
+- ⌘Q quit Chrome completely and reopen (required to activate the AX bridge)
+- Verify: the `AXManualAccessibility` flag is set automatically via `defaults write`
 
 ## Tools
 
