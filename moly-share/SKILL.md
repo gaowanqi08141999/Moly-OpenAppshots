@@ -13,11 +13,17 @@ platforms: [macos]
 
 ## 🚨 MANDATORY RULES — READ BEFORE ANY ACTION
 
-1. **If user PASTES a PNG image**: Run `python3 ~/.moly/moly_path.py <path_to_pasted_image>` FIRST.
-   - If it returns a directory → `cat` the JSON files there. Done.
-   - If it returns empty → the image was **re-encoded** (png→jpeg, cache, etc.) and metadata was lost.
-     → Run `curl -s 'http://127.0.0.1:19876/snapshots?limit=1'` as fallback.
-   - Do NOT loop or retry moly_path.py — it will still be empty on retry.
+1. **ALWAYS try `~/.moly/latest.txt` FIRST** — every Moly capture writes the snapshot
+   directory path here. One local `cat`, no API calls, no PNG parsing.
+   ```bash
+   SNAP_DIR=$(cat ~/.moly/latest.txt 2>/dev/null)
+   cat "$SNAP_DIR/metadata.json"           # instant
+   cat "$SNAP_DIR/accessibility_tree.json" # instant
+   ```
+   If `latest.txt` is empty/absent, fall back to:
+   - `python3 ~/.moly/moly_path.py <image_path>` (try PNG metadata first)
+   - `curl -s 'http://127.0.0.1:19876/snapshots?limit=1'` (HTTP fallback)
+   - But **never** retry the same failing method. Try each ONCE, then move on.
 
 2. **If user gives a FILE PATH** (e.g. `~/snapshots/.../screenshot.png`): `dirname` it, then `cat $dir/metadata.json` and `cat $dir/accessibility_tree.json`. Done.
 
@@ -27,8 +33,8 @@ platforms: [macos]
 
 ## ⚡ FAST PATH (Zero API Calls)
 
-Every screenshot PNG contains embedded metadata (`moly_path`) pointing to the local
-snapshot directory. Use the `moly_path.py` utility to extract it:
+**Golden path — one command:** `cat ~/.moly/latest.txt`
+Returns the latest snapshot directory path instantly. Then `cat` the JSON files inside.
 
 ### Pattern A: User provides a file path
 

@@ -97,6 +97,13 @@ final class StorageEngine {
             throw StorageError.sqliteError(String(cString: sqlite3_errmsg(db)))
         }
 
+        // Write latest snapshot path to a well-known file for instant agent lookup.
+        // Agent can run: cat ~/.moly/latest.txt → get dir → cat $dir/metadata.json
+        // Zero HTTP round-trips, zero PNG parsing — one cat, done.
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let latestFile = home.appendingPathComponent(".moly/latest.txt")
+        try? snapDir.path.write(to: latestFile, atomically: true, encoding: .utf8)
+
         return SnapshotSummary(
             id: result.summary.id,
             timestamp: result.summary.timestamp,
