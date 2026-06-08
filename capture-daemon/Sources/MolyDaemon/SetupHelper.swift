@@ -377,6 +377,13 @@ final class SetupHelper {
             print("│  \(check) Chrome Accessibility already granted")
             print("│  \(check) AXManualAccessibility + policy + prefs set")
             print("│")
+            // Check if Chrome is running with --force-renderer-accessibility
+            let needsRestart = !chromeHasAccessibilityFlag()
+            if needsRestart {
+                print("│  \(cross) Chrome is NOT running with --force-renderer-accessibility")
+                print("│  \(arrow) Restart Chrome with accessibility flag:")
+                print("│         open -a \"Google Chrome\" --args --force-renderer-accessibility")
+            }
             print("│  ⚠️  If you haven't ⌘Q quit + reopened Chrome yet, do it now!")
             print("└──────────────────────────────────────────────────────────────")
             return true
@@ -526,25 +533,61 @@ final class SetupHelper {
         }
     }
 
-    /// Write Chrome internal preferences to enable screen-reader accessibility mode.
+    /// Write Chrome internal preferences + Local State to force accessibility.
+    /// Three files must be set for Chrome to reliably expose web content AX trees:
+    ///   1. Default/Preferences → accessibility.screenReader = true
+    ///   2. Local State → accessibility.force_renderer_accessibility = true
+    ///   3. com.google.Chrome defaults → AXManualAccessibility + AXEnhancedUserInterface
     private static func writeChromePreferences() {
-        let prefsDir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Google/Chrome/Default")
-        let prefsFile = prefsDir.appendingPathComponent("Preferences")
+        let chromeDir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Google/Chrome")
 
-        guard var prefs = (try? JSONSerialization.jsonObject(with: Data(contentsOf: prefsFile))) as? [String: Any] else {
-            return
+        // 1. Profile Preferences
+        let prefsFile = chromeDir.appendingPathComponent("Default/Preferences")
+        if var prefs = (try? JSONSerialization.jsonObject(with: Data(contentsOf: prefsFile))) as? [String: Any] {
+            var acc = prefs["accessibility"] as? [String: Any] ?? [:]
+            acc["enabled"] = true
+            acc["screenReader"] = true
+            acc["imageLabels"] = true
+            prefs["accessibility"] = acc
+            if let data = try? JSONSerialization.data(withJSONObject: prefs, options: []) {
+                try? data.write(to: prefsFile)
+            }
         }
 
-        var acc = prefs["accessibility"] as? [String: Any] ?? [:]
-        acc["enabled"] = true
-        acc["imageLabels"] = true
-        acc["screenReader"] = true
-        prefs["accessibility"] = acc
-
-        if let data = try? JSONSerialization.data(withJSONObject: prefs, options: []) {
-            try? data.write(to: prefsFile)
+        // 2. Local State (global Chrome settings)
+        let localStateFile = chromeDir.appendingPathComponent("Local State")
+        if var state = (try? JSONSerialization.jsonObject(with: Data(contentsOf: localStateFile))) as? [String: Any] {
+            var acc = state["accessibility"] as? [String: Any] ?? [:]
+            acc["enabled"] = true
+            acc["force_renderer_accessibility"] = true
+            state["accessibility"] = acc
+            if let data = try? JSONSerialization.data(withJSONObject: state, options: []) {
+                try? data.write(to: localStateFile)
+            }
         }
+
+        // 3. NSUserDefaults (read by Chrome on startup)
+        for (key, val) in [("AXManualAccessibility", "true"), ("AccessibilityEnabled", "true"), ("AXEnhancedUserInterface", "true")] {
+            let defs = Process()
+            defs.launchPath = "/usr/bin/defaults"
+            defs.arguments = ["write", "com.google.Chrome", key, "-bool", val]
+            defs.standardOutput = FileHandle.nullDevice
+            defs.standardError = FileHandle.nullDevice
+            try? defs.run(); defs.waitUntilExit()
+        }
+    }
+
+    /// Check if Chrome is running with the --force-renderer-accessibility flag.
+    private static func chromeHasAccessibilityFlag() -> Bool {
+        let task = Process()
+        task.launchPath = "/bin/ps"
+        task.arguments = ["-axo", "args"]
+        let pipe = Pipe(); task.standardOutput = pipe; task.standardError = FileHandle.nullDevice
+        try? task.run()
+        task.waitUntilExit()
+        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        return out.contains("--force-renderer-accessibility")
     }
 
     /// Quick check if a client has Accessibility permission in TCC.
