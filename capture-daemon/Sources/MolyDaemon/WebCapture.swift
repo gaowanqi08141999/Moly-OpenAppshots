@@ -1,176 +1,201 @@
 import Foundation
-import AppKit
 
-/// Captured web page data (DOM + CSS) via AppleScript JavaScript injection.
+/// Captured web page data (DOM + CSS) via Chrome DevTools Protocol.
 struct WebCaptureData {
     let pageUrl: String?
     let renderedHtml: String?
     let stylesJson: String?
 }
 
-/// Extracts rendered DOM and full CSS from browser tabs via AppleScript `execute javascript`.
-/// Chrome/Chromium: `tell app "Google Chrome" to execute javascript` on active tab.
-/// Safari: not yet supported (different AppleScript dictionary).
-/// Non-browser apps: returns nil immediately.
+/// Extracts rendered DOM and full CSS from Chromium-based browsers
+/// using Chrome DevTools Protocol (CDP) over WebSocket.
+///
+/// Requires: Chrome launched with `--remote-debugging-port=9222`
+///           (handled by `molyd --setup` automatically)
+///
+/// No AppleScript, no Chrome "Allow JavaScript from Apple Events" needed.
 enum WebCapture {
 
-    /// Seconds before we give up on JS injection (long pages can be slow).
-    private static let timeout: TimeInterval = 4.0
+    private static let cdpHost = "127.0.0.1"
+    private static let cdpPort = 9222
+    private static let timeout: TimeInterval = 5.0
 
-    /// Attempt web capture if the target process is a browser.
-    /// Returns nil if not a browser, or if AppleScript/JS injection fails.
+    // MARK: - Public API
+
     static func capture(pid: pid_t, bundleID: String) async -> WebCaptureData? {
-        guard let browserName = browserAppName(for: bundleID) else { return nil }
+        guard isChromiumBrowser(bundleID) else { return nil }
+        guard await isCDPAvailable() else {
+            print("[WebCapture] CDP port \(cdpPort) not available. Launch Chrome with --remote-debugging-port=\(cdpPort)")
+            return nil
+        }
 
-        // Build AppleScript. Chrome's OSAX limits JS result to ~10MB;
-        // we cap each extraction in the JS itself.
-        let script = buildScript(browserName: browserName, pid: pid)
+        // 1. Get list of debuggable pages from CDP
+        guard let pages = await fetchCDPPageList() else {
+            print("[WebCapture] Failed to fetch CDP page list")
+            return nil
+        }
 
-        return await withCheckedContinuation { cont in
-            let task = Process()
-            task.launchPath = "/usr/bin/osascript"
-            task.arguments = ["-e", script]
+        // 2. Pick the active page (first in list is usually the frontmost tab)
+        guard let target = pages.first else {
+            print("[WebCapture] No debuggable pages found")
+            return nil
+        }
 
-            let outPipe = Pipe()
-            let errPipe = Pipe()
-            task.standardOutput = outPipe
-            task.standardError = errPipe
+        let pageUrl = target["url"] as? String
+        let pageTitle = target["title"] as? String
+        guard let wsURL = target["webSocketDebuggerUrl"] as? String else {
+            print("[WebCapture] No webSocketDebuggerUrl for page: \(pageTitle ?? "?")")
+            return nil
+        }
 
-            // Timeout
-            let timer = DispatchSource.makeTimerSource()
-            timer.schedule(deadline: .now() + timeout)
-            timer.setEventHandler {
-                task.terminate()
+        // 3. Connect via WebSocket and run JS extraction
+        guard let wsTask = connectWebSocket(wsURL) else {
+            print("[WebCapture] WebSocket connection failed")
+            return nil
+        }
+
+        // 4. Execute JavaScript to extract DOM + CSS
+        let js = injectedJavaScript()
+        guard let result = await evaluateJS(wsTask: wsTask, js: js) as? [String: Any] else {
+            wsTask.cancel()
+            print("[WebCapture] JS evaluation returned no result")
+            return nil
+        }
+
+        wsTask.cancel()
+
+        // 5. Parse result
+        var renderedHtml: String?
+        var stylesJson: String?
+
+        if let html = result["html"] as? String, !html.isEmpty {
+            renderedHtml = html
+        }
+
+        // Re-serialize CSS data as pretty JSON
+        if let _ = result["all_rules"] {
+            if let pretty = try? JSONSerialization.data(withJSONObject: result, options: [.prettyPrinted, .sortedKeys]),
+               let jsonStr = String(data: pretty, encoding: .utf8) {
+                stylesJson = jsonStr
             }
-            timer.resume()
+        }
 
-            let lock = NSLock()
-            var didResume = false
-            task.terminationHandler = { _ in
-                timer.cancel()
-                lock.lock()
-                guard !didResume else { lock.unlock(); return }
-                didResume = true
-                lock.unlock()
+        print("[WebCapture] URL=\(pageUrl ?? "nil") DOM=\(renderedHtml?.count ?? 0) bytes CSS=\(stylesJson?.count ?? 0) bytes")
+        return WebCaptureData(pageUrl: pageUrl, renderedHtml: renderedHtml, stylesJson: stylesJson)
+    }
 
-                let raw = String(data: outPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-                let err = String(data: errPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+    // MARK: - CDP Communication
 
-                if task.terminationStatus != 0 || raw.isEmpty {
-                    let errMsg = err.lowercased()
-                    if errMsg.contains("执行 javascript") || errMsg.contains("execute javascript") || errMsg.contains("applescript") {
-                        print("[WebCapture] ⚠️  Chrome → View → Developer → Allow JavaScript from Apple Events must be enabled.")
-                        print("[WebCapture]    Fallback: page URL is still extracted from AX tree.")
-                    } else {
-                        print("[WebCapture] AppleScript failed (status=\(task.terminationStatus)): \(err.prefix(200))")
-                    }
-                    cont.resume(returning: nil)
-                    return
+    private static func isCDPAvailable() async -> Bool {
+        guard let url = URL(string: "http://\(cdpHost):\(cdpPort)/json/version") else { return false }
+        var req = URLRequest(url: url, timeoutInterval: 1.5)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        do {
+            let (data, _) = try await URLSession.shared.data(for: req)
+            return !data.isEmpty
+        } catch {
+            return false
+        }
+    }
+
+    private static func fetchCDPPageList() async -> [[String: Any]]? {
+        guard let url = URL(string: "http://\(cdpHost):\(cdpPort)/json") else { return nil }
+        var req = URLRequest(url: url, timeoutInterval: 2.0)
+        req.cachePolicy = .reloadIgnoringLocalCacheData
+        do {
+            let (data, _) = try await URLSession.shared.data(for: req)
+            return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+        } catch {
+            print("[WebCapture] CDP /json failed: \(error)")
+            return nil
+        }
+    }
+
+    private static func connectWebSocket(_ wsURLString: String) -> URLSessionWebSocketTask? {
+        guard let url = URL(string: wsURLString) else { return nil }
+        let task = URLSession.shared.webSocketTask(with: url)
+        task.resume()
+        return task
+    }
+
+    private static func evaluateJS(wsTask: URLSessionWebSocketTask, js: String) async -> Any? {
+        let cmd: [String: Any] = [
+            "id": 1,
+            "method": "Runtime.evaluate",
+            "params": [
+                "expression": js,
+                "returnByValue": true,
+                "timeout": 3000
+            ]
+        ]
+
+        guard let cmdData = try? JSONSerialization.data(withJSONObject: cmd),
+              let cmdStr = String(data: cmdData, encoding: .utf8) else { return nil }
+
+        do {
+            try await wsTask.send(.string(cmdStr))
+        } catch {
+            print("[WebCapture] send error: \(error)")
+            return nil
+        }
+
+        // Receive with timeout
+        do {
+            let msg = try await withThrowingTaskGroup(of: URLSessionWebSocketTask.Message.self) { group in
+                group.addTask { try await wsTask.receive() }
+                group.addTask {
+                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    throw CancellationError()
                 }
-
-                // The AppleScript returns: pageURL \n ---MOLY_JSON--- \n jsonPayload
-                let parts = raw.components(separatedBy: "\n---MOLY_JSON---\n")
-                let pageUrl = parts.first?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let jsonPayload = parts.count > 1 ? parts[1] : nil
-
-                // Parse JSON payload
-                var renderedHtml: String?
-                var stylesJson: String?
-                if let jsonStr = jsonPayload,
-                   let jsonData = jsonStr.data(using: .utf8),
-                   let dict = (try? JSONSerialization.jsonObject(with: jsonData)) as? [String: Any] {
-                    renderedHtml = dict["html"] as? String
-                    // Re-serialize the structured CSS data as pretty JSON
-                    if let _ = dict["all_rules"] {
-                        if let prettyData = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) {
-                            stylesJson = String(data: prettyData, encoding: .utf8)
-                        }
-                    }
-                }
-
-                // Fallback URL: extract from AX tree if AppleScript didn't give us one
-                let finalUrl = (pageUrl?.isEmpty == false) ? pageUrl : nil
-                print("[WebCapture] URL=\(finalUrl ?? "nil") DOM=\(renderedHtml?.count ?? 0) bytes CSS=\(stylesJson?.count ?? 0) bytes")
-                cont.resume(returning: WebCaptureData(
-                    pageUrl: finalUrl,
-                    renderedHtml: renderedHtml,
-                    stylesJson: stylesJson
-                ))
+                let result = try await group.next()!
+                group.cancelAll()
+                return result
             }
 
-            do {
-                try task.run()
-            } catch {
-                lock.lock()
-                if !didResume {
-                    didResume = true
-                    lock.unlock()
-                    cont.resume(returning: nil)
-                } else {
-                    lock.unlock()
+            guard case .string(let json) = msg,
+                  let data = json.data(using: .utf8),
+                  let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return nil
+            }
+
+            // CDP response: {"id":1,"result":{"result":{"type":"string","value":"..."}}}
+            guard let cdpResult = dict["result"] as? [String: Any],
+                  let innerResult = cdpResult["result"] as? [String: Any] else {
+                return nil
+            }
+
+            // JS returns JSON.stringify(...) → it's a string value
+            if let valueStr = innerResult["value"] as? String {
+                if let valueData = valueStr.data(using: .utf8),
+                   let obj = try? JSONSerialization.jsonObject(with: valueData) {
+                    return obj
                 }
             }
+            // Fallback: the value might already be a dict (non-stringified)
+            if let valueDict = innerResult["value"] as? [String: Any] {
+                return valueDict
+            }
+            return nil
+        } catch {
+            print("[WebCapture] receive/timeout: \(error)")
+            return nil
         }
     }
 
     // MARK: - Browser Detection
 
-    /// Returns the AppleScript application name for the given bundle ID, or nil if not a browser.
-    private static func browserAppName(for bundleID: String) -> String? {
-        // Chromium-based browsers
-        if bundleID.hasPrefix("com.google.Chrome") { return "Google Chrome" }
-        if bundleID.hasPrefix("com.brave.Browser")   { return "Brave Browser" }
-        if bundleID.hasPrefix("com.microsoft.edgemac") { return "Microsoft Edge" }
-        if bundleID.hasPrefix("org.chromium.Chromium") { return "Chromium" }
-        if bundleID.hasPrefix("com.operasoftware.Opera") { return "Opera" }
-        if bundleID.hasPrefix("com.vivaldi.Vivaldi")   { return "Vivaldi" }
-        // Safari
-        if bundleID == "com.apple.Safari" { return "Safari" }
-        // Arc
-        if bundleID == "company.thebrowser.Browser" { return "Arc" }
-
-        // Electron apps: check for framework on disk
-        // Use NSWorkspace to find the app
-        if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            let frameworkPath = appURL.appendingPathComponent("Contents/Frameworks/Electron Framework.framework").path
-            if FileManager.default.fileExists(atPath: frameworkPath) {
-                return appURL.deletingPathExtension().lastPathComponent
-            }
-        }
-        return nil
+    private static func isChromiumBrowser(_ bundleID: String) -> Bool {
+        if bundleID.hasPrefix("com.google.Chrome") { return true }
+        if bundleID.hasPrefix("com.brave.Browser")   { return true }
+        if bundleID.hasPrefix("com.microsoft.edgemac") { return true }
+        if bundleID.hasPrefix("org.chromium.Chromium") { return true }
+        if bundleID.hasPrefix("com.operasoftware.Opera") { return true }
+        if bundleID.hasPrefix("com.vivaldi.Vivaldi")   { return true }
+        return false
     }
 
-    // MARK: - AppleScript Construction
+    // MARK: - JavaScript Injection Payload
 
-    private static func buildScript(browserName: String, pid: pid_t) -> String {
-        // Chromium-based approach: tell app by name, access active tab
-        // Uses System Events to resolve PID → app name safely
-        let jsCode = injectedJavaScript()
-
-        return """
-        on run
-            set pageURL to ""
-            try
-                tell application "\(browserName)"
-                    set pageURL to URL of active tab of front window
-                end tell
-            end try
-
-            set jsonResult to ""
-            try
-                tell application "\(browserName)"
-                    set jsonResult to execute active tab of front window javascript "\(escapingMolyJSON(jsCode))"
-                end tell
-            end try
-
-            return pageURL & "
-        ---MOLY_JSON---
-        " & jsonResult
-        end run
-        """
-    }
-
-    /// JavaScript that runs inside the browser page to extract DOM + CSS + layout.
     private static func injectedJavaScript() -> String {
         return #"""
 (function(){
@@ -199,7 +224,6 @@ enum WebCapture {
                     var cssText = (rule.cssText || '').substring(0, MAX_RULE_LEN);
                     var selector = rule.selectorText || rule.type?.toString() || '';
                     rules.push({ selector: selector, cssText: cssText });
-                    // Extract color values
                     var matches = cssText.match(/#[0-9a-fA-F]{3,8}\b|rgba?\([^)]+\)|hsla?\([^)]+\)/g) || [];
                     matches.forEach(function(c) { colors.add(c); });
                 }
@@ -213,7 +237,6 @@ enum WebCapture {
     try {
         document.fonts.forEach(function(f) { fonts.add(f.family); });
     } catch(e) {}
-    // Also collect from body/headings
     try {
         var els = document.querySelectorAll('body,h1,h2,h3,h4,h5,h6,p,nav,header,footer,button,a');
         for (var i = 0; i < Math.min(els.length, 50); i++) {
@@ -222,7 +245,7 @@ enum WebCapture {
     } catch(e) {}
     data.fonts = Array.from(fonts).filter(function(f) { return f && f.length > 0 && f !== 'serif' && f !== 'sans-serif'; }).slice(0, 20);
 
-    // ── 4. Layout: computed styles for semantic elements ──
+    // ── 4. Layout stamps ──
     function getStyles(el) {
         if (!el) return {};
         var s = getComputedStyle(el);
@@ -252,23 +275,11 @@ enum WebCapture {
         h1: getStyles(document.querySelector('h1')),
         h2: getStyles(document.querySelector('h2')),
         button: getStyles(document.querySelector('button,.btn,[class*="button"],a[class*="btn"]')),
-        card: getStyles(document.querySelector('[class*="card"],article,.card-container'))
+        card: getStyles(document.querySelector('[class*="card"],article'))
     };
 
     return JSON.stringify(data);
 })();
 """#
-    }
-
-    /// Escape the JS string for embedding inside an AppleScript string.
-    /// AppleScript uses backslash-escaped double quotes inside an outer double-quoted string.
-    private static func escapingMolyJSON(_ js: String) -> String {
-        // Replace backslash, double quote, newline
-        var escaped = js
-        escaped = escaped.replacingOccurrences(of: "\\", with: "\\\\")
-        escaped = escaped.replacingOccurrences(of: "\"", with: "\\\"")
-        escaped = escaped.replacingOccurrences(of: "\n", with: "\\n")
-        escaped = escaped.replacingOccurrences(of: "\r", with: "\\r")
-        return escaped
     }
 }

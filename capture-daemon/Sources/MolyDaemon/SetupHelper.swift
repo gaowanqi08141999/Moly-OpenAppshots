@@ -380,12 +380,16 @@ final class SetupHelper {
             print("│  \(check) Chrome Accessibility already granted")
             print("│  \(check) AXManualAccessibility + policy + prefs set")
             print("│")
-            // Check if Chrome is running with --force-renderer-accessibility
+            // Check if Chrome is running with required flags
             let needsRestart = !chromeHasAccessibilityFlag()
-            if needsRestart {
-                print("│  \(cross) Chrome is NOT running with --force-renderer-accessibility")
-                print("│  \(arrow) Restart Chrome with accessibility flag:")
-                print("│         open -a \"Google Chrome\" --args --force-renderer-accessibility")
+            let needsCDP = !chromeHasDebuggingPort()
+            if needsRestart || needsCDP {
+                var flags = "--force-renderer-accessibility"
+                if needsCDP { flags += " --remote-debugging-port=9222" }
+                print("│  \(cross) Chrome missing required flag(s):")
+                if needsRestart { print("│          --force-renderer-accessibility") }
+                if needsCDP { print("│          --remote-debugging-port=9222 (web capture)") }
+                print("│  \(arrow) Restart with: open -a \"Google Chrome\" --args \(flags)")
             }
             print("│  ⚠️  If you haven't ⌘Q quit + reopened Chrome yet, do it now!")
             print("└──────────────────────────────────────────────────────────────")
@@ -591,6 +595,21 @@ final class SetupHelper {
         task.waitUntilExit()
         let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
         return out.contains("--force-renderer-accessibility")
+    }
+
+    /// Check if Chrome is running with --remote-debugging-port (needed for CDP web capture).
+    private static func chromeHasDebuggingPort() -> Bool {
+        // Quick check: can we connect to the debugging port?
+        guard let url = URL(string: "http://127.0.0.1:9222/json") else { return false }
+        let sem = DispatchSemaphore(value: 0)
+        var hasPort = false
+        let task = URLSession.shared.dataTask(with: URLRequest(url: url, timeoutInterval: 1.0)) { data, _, error in
+            if let data = data, error == nil, !data.isEmpty { hasPort = true }
+            sem.signal()
+        }
+        task.resume()
+        _ = sem.wait(timeout: .now() + 1.5)
+        return hasPort
     }
 
     /// Quick check if a client has Accessibility permission in TCC.
