@@ -4,7 +4,7 @@
 
 [English](README.md) | [中文](README_CN.md)
 
-> *A clever little cat that sees your screen and tells AI agents what's there.*
+> *Hey, human! C’mon, let me sneak a peek at your screen🐱*
 
 **Moly** captures your macOS screen — screenshot + accessibility text tree — and feeds the result to any AI agent through a standard MCP (Model Context Protocol) interface.
 
