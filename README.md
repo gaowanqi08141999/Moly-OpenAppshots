@@ -25,6 +25,7 @@
 5. `~/.moly/latest.txt` is atomically updated with the snapshot directory path — this is the primary agent lookup path (one `cat`, zero API calls)
 6. The PNG is also embedded with `moly_path` metadata as a secondary lookup path, then copied to the clipboard
 7. A Python MCP server (`moly_mcp.py`) exposes 6 tools via stdio JSON-RPC — any MCP-compatible agent can call them as a fallback
+8. For browser captures, the daemon also connects to Chrome DevTools Protocol (CDP) to extract the full rendered DOM and CSS— no manual browser settings required
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org)
@@ -40,6 +41,7 @@ You press ⌃⌥⌘Space
 ┌──────────────────┐
 │  ScreenCaptureKit │  →  Retina 2x PNG screenshot
 │  Accessibility API│  →  Structured text tree (AX)
+│  Chrome CDP (9222)│  →  DOM + CSS (dom.html, styles.json)
 └────────┬─────────┘
          │
     ┌────┴────┐
@@ -66,6 +68,7 @@ You press ⌃⌥⌘Space
 - **Agent fast path** — `~/.moly/latest.txt` gives agents the snapshot directory in one `cat`; zero API calls
 - **PNG metadata embedding** — secondary lookup: PNG `tEXt` chunk carries `moly_path` for direct-to-disk access (works when the image is not re-encoded)
 - **Electron app support** — `--setup` auto-configures Longbridge Pro, VS Code, Discord, Slack, and other Electron desktop apps
+- **Web capture layer** — captures `page_url.txt`, `dom.html` (full rendered DOM), and `styles.json` (CSS rules, palette, fonts, layout) for browser tabs — perfect for website replication
 - **Unified MCP** — same 6 tools for Hermes, OpenClaw, Claude Desktop, Cursor, and any MCP client
 - **Apple-style notification** — white rounded overlay at top-right with custom icon
 - **Screen flash** — instant visual feedback on capture
@@ -85,9 +88,13 @@ chmod +x install.sh && ./install.sh
 #    → Handles: Accessibility (molyd), Screen Recording (molyd),
 #               Accessibility (Google Chrome), Accessibility (Electron apps)
 
-# 3. Restart Chrome / Electron apps (if you use them)
-#    Launch with: open -a "App Name" --args --force-renderer-accessibility
-#    This flag is REQUIRED for Chrome/Electron to expose web content to AX
+# 3. Restart Chrome with required flags (if you use it)
+#    These enable AX tree + web capture (DOM/CSS):
+#    open -a "Google Chrome" --args \
+#        --force-renderer-accessibility \
+#        --remote-debugging-port=9222 \
+#        --remote-allow-origins=*
+#    (Electron apps: --force-renderer-accessibility only)
 
 # 4. Restart daemon (required after granting new permissions)
 killall molyd; sleep 1; ~/.moly/bin/molyd &
@@ -135,12 +142,25 @@ See [MCP_SETUP.md](moly-share/MCP_SETUP.md) for all platforms.
 
 ### Chrome & Electron App Users
 
-Chrome and Electron apps (VS Code, Discord, Slack, Longbridge Pro, etc.) render web content in sub-processes. Their AX bridge only activates when **the app itself** has Accessibility permission AND is launched with `--force-renderer-accessibility`.
+Chrome and Electron apps render web content in sub-processes — their AX bridge only activates when the app itself has Accessibility permission AND the right flags.
 
 `molyd --setup` handles this automatically (steps 3 & 4). After setup:
 
-- ⌘Q quit and reopen each app with: `open -a "App Name" --args --force-renderer-accessibility`
-- Verify: `curl -s http://127.0.0.1:19876/axdiag` → `ax_trusted: true`
+**Chrome** (AX + web capture):
+```
+open -a "Google Chrome" --args \
+    --force-renderer-accessibility \
+    --remote-debugging-port=9222 \
+    --remote-allow-origins=*
+```
+The CDP port enables Moly to extract `page_url.txt`, `dom.html` (full rendered DOM), and `styles.json` (CSS rules, palette, fonts, layout) — the complete design layer for website replication.
+
+**Electron apps** (AX only):
+```
+open -a "App Name" --args --force-renderer-accessibility
+```
+
+Verify: `curl -s http://127.0.0.1:19876/axdiag` → `ax_trusted: true`
 
 ## Tools
 
@@ -158,14 +178,15 @@ Chrome and Electron apps (VS Code, Discord, Slack, Longbridge Pro, etc.) render 
 ## Architecture
 
 ```
-┌──────────────────────────────────────┐
-│          MolyDaemon (:19876)          │
-│  Swift, ScreenCaptureKit + AX API    │
-│                                      │
-│  Hotkey: ⌃⌥⌘Space                   │
-│  Storage: ~/snapshots/ (SQLite+FS)   │
-│  Assets: ~/.moly/ (icon, notify, etc)│
-└──────────────┬───────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│          MolyDaemon (:19876)                          │
+│  Swift, ScreenCaptureKit + AX API + CDP (Chrome)     │
+│                                                      │
+│  Hotkey: ⌃⌥⌘Space                                   │
+│  Storage: ~/snapshots/ (SQLite+FS)                   │
+│  Assets: ~/.moly/ (icon, notify, etc)                 │
+│  Web: DOM/CSS via Chrome DevTools Protocol            │
+└──────────────┬───────────────────────────────────────┘
                │ HTTP
     ┌──────────┴──────────┐
     ▼                     ▼
@@ -224,8 +245,8 @@ Chrome's multi-process architecture isolates the web content AX tree from the ma
 **Does it work with finance/stock apps (Longbridge Pro, etc.)?**  
 Yes. Electron-based desktop apps are auto-detected and configured by `molyd --setup` (step 4). After configuration, launch the app with `open -a "App Name" --args --force-renderer-accessibility`. Non-Electron custom-rendering apps may not expose AX trees.
 
-**How do agents find the snapshot data?**  
-Primary path: `cat ~/.moly/latest.txt` returns the latest snapshot directory instantly — one local `cat`, zero HTTP. Secondary: `python3 ~/.moly/moly_path.py <image>` reads embedded PNG metadata. Fallback: `curl http://127.0.0.1:19876/snapshots?limit=1` via daemon API.
+**Can Moly capture CSS/styles for website replication?**  
+Yes. When Chrome runs with `--remote-debugging-port=9222`, Moly connects via CDP (Chrome DevTools Protocol) and extracts: `page_url.txt` (URL), `dom.html` (full rendered DOM), and `styles.json` (CSS rules, color palette, fonts, layout stamps). This gives agents the complete design layer alongside the AX text tree — perfect for replicating website designs.
 
 **Where are snapshots stored?**  
 `~/snapshots/<date>/<id>/` — each snapshot has `screenshot.png`, `metadata.json`, and `accessibility_tree.json`. The PNG file embeds the directory path in its metadata for instant agent access.
