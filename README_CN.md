@@ -1,34 +1,40 @@
 <img src="https://raw.githubusercontent.com/gaowanqi08141999/Moly-OpenAppshots/main/cover.png" style="display:none">
 
-# Moly — 面向 AI 智能体的截图信息挖掘工具
+# Moly — 面向 AI 智能体的开源截图工具
 
 [English](README.md) | [中文](README_CN.md)
 
-> *嘿，人！把你的屏幕给我看看🐱*
+> *一只聪明的小猫，看见你的屏幕，告诉 AI 一切。*
 
-**Moly** 一键捕获 macOS 屏幕截图 + 可访问性文本树（AXTree）—— 通过标准 MCP 投喂给任意 Agent。
+**Moly** 一键捕获 macOS 屏幕——截图 + 可访问性文本树——通过标准 MCP 协议喂给任何 AI 智能体。
 
 ### Moly 做什么
 
-- **一键截图（⌃⌥⌘Space）**：同时捕获前台窗口的全量信息
+- **一键截图（⌃⌥⌘Space）**：同时捕获前台窗口的两层信息
 - **视觉层**：Retina 2x PNG 高清截图，通过 macOS ScreenCaptureKit 获取
-- **文本层**：完整的可访问性元素树 —— 智能体可以读取屏幕上的每一个标签、按钮和段落，获取截图相关的全面信息
+- **文本层**：完整的可访问性元素树——智能体可以读取屏幕上的每一个标签、按钮和段落
 - **剪贴板自动复制**：截图自动入剪贴板，⌘V 直接粘贴
+- **智能体快路径**：每次截图自动写入 `~/.moly/latest.txt`——智能体只需 `cat` 这个文件就能拿到最新截图目录，零 HTTP 调用
 
 ### 实现原理
 
-1. 轻量级 Swift daemon（`~/.moly/bin/molyd`）在本地 19876 端口运行
+1. 一个轻量级 Swift daemon（`~/.moly/bin/molyd`）在本地 19876 端口运行
 2. 通过 CGEvent tap 全局监听 ⌃⌥⌘Space 快捷键
 3. 截图时获取前台窗口 PID，ScreenCaptureKit 截图，同时遍历窗口的可访问性元素树
 4. 两者保存到 `~/snapshots/<日期>/<ID>/`，由 SQLite 索引
-5. PNG 嵌入 `moly_path` 元数据指向其快照目录，然后复制到剪贴板
-6. Python MCP 服务器（`moly_mcp.py`）通过 stdio JSON-RPC 暴露 5 个工具——任何 MCP 兼容的智能体都能调用
-7. 如果用户粘贴图片，智能体从 PNG 中提取 `moly_path`，直接读取本地 JSON 文件——无需 API 调用
+5. `~/.moly/latest.txt` 原子更新为最新快照目录路径——这是智能体的首选查找路径（一次 `cat`，零 API 调用）
+6. PNG 同时嵌入 `moly_path` 元数据作为备用查找路径，然后复制到剪贴板
+7. Python MCP 服务器（`moly_mcp.py`）通过 stdio JSON-RPC 暴露 6 个工具——任何 MCP 兼容的智能体都能调用，作为降级备用
+
+[![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](https://www.apple.com/macos/)
+[![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-compatible-purple)](https://modelcontextprotocol.io/)
 
 ## 工作原理
 
 ```
-按下快捷键 ⌃⌥⌘Space
+你按下 ⌃⌥⌘Space
         │
         ▼
 ┌──────────────────┐
@@ -39,11 +45,11 @@
     ┌────┴────┐
     │         │
     ▼         ▼
- ~/snapshots/   剪贴板附截图
+ ~/snapshots/   剪贴板（PNG 含嵌入式元数据）
     │              │
     ▼              ▼
   MCP 服务器    智能体解析
-  (5 个工具)    元数据直达本地文件
+  (6 个工具)    元数据直达本地文件
     │              │
     └──────┬───────┘
            ▼
@@ -54,11 +60,13 @@
 
 ## 特性
 
-- **⌃⌥⌘Space 快捷键** — daemon 内置，安装本项目后直接按快捷键唤起
+- **⌃⌥⌘Space 快捷键** — daemon 内置，无需 Shortcuts.app
 - **双重捕获** — Retina PNG 截图 + 完整 AX 文本树，一次完成
 - **剪贴板自动复制** — 截图后直接 ⌘V 粘贴到任意对话框
-- **PNG 元数据嵌入** — 粘贴的图片携带本地文件路径，智能体直接读取本地 JSON，0 次 API 调用
-- **统一 MCP** — 一套工具适配 Hermes、OpenClaw、Claude Desktop、Cursor 及任何 MCP 客户端
+- **智能体快路径** — `~/.moly/latest.txt` 让智能体一次 `cat` 即获截图路径，零 API 调用
+- **PNG 元数据嵌入** — 备用查找：PNG `tEXt` 块携带 `moly_path` 实现直达磁盘读取（图片未被重编码时有效）
+- **Electron 应用支持** — `--setup` 自动配置 Longbridge Pro、VS Code、Discord、Slack 等 Electron 桌面应用
+- **统一 MCP** — 一套工具 6 个接口，适配 Hermes、OpenClaw、Claude Desktop、Cursor 及任何 MCP 客户端
 - **Apple 风格通知** — 右上角白色圆角弹窗，带自定义图标
 - **屏幕闪白** — 截图瞬间的视觉反馈
 - **100% 本地** — 不上传云端，不需要 API key，不需要网络
@@ -73,11 +81,13 @@ chmod +x install.sh && ./install.sh
 
 # 2. 运行一次性权限设置向导
 ~/.moly/bin/molyd --setup
-#    → 依次打开系统设置，逐步引导你授予三项权限
-#    → 涵盖：辅助功能 (molyd)、屏幕录制 (molyd)、辅助功能 (Google Chrome)
+#    → 自动配置全部权限，无需手动点系统设置
+#    → 涵盖：辅助功能 (molyd)、屏幕录制 (molyd)、
+#            辅助功能 (Google Chrome)、辅助功能 (Electron 应用)
 
-# 3. 重启 Chrome（如果你使用它）
-#    ⌘Q 完全退出 Chrome，再重新打开 — Chrome 只在启动时激活 AX 桥接
+# 3. 重启 Chrome / Electron 应用（如果你使用它们）
+#    启动时加参数：open -a "应用名" --args --force-renderer-accessibility
+#    此参数是 Chrome/Electron 暴露网页内容给 AX 的必要条件
 
 # 4. 重启 daemon（授权后必须重启）
 killall molyd; sleep 1; ~/.moly/bin/molyd &
@@ -93,8 +103,6 @@ cd ../capture-daemon && make doctor
 # 💡 每次重新编译/更新二进制后，需要重新运行：
 #    ~/.moly/bin/molyd --setup
 #    （macOS TCC 将权限绑定到二进制哈希值 — 每次重编译都会使旧授权失效。）
-
-# 6. 搞定！在任意窗口按 ⌃⌥⌘Space，⌘V 粘贴给智能体
 ```
 
 ### 智能体配置
@@ -125,14 +133,14 @@ mcp_servers:
 
 详细配置见 [MCP_SETUP.md](moly-share/MCP_SETUP.md)。
 
-### Chrome 用户
+### Chrome 与 Electron 应用用户
 
-Chrome 的网页内容需要额外授权辅助功能（Chrome 把网页渲染在子进程中，必须 Chrome **本体**有辅助功能权限才能激活 AX 桥接）。
+Chrome 和 Electron 应用（VS Code、Discord、Slack、Longbridge Pro 等）把网页内容渲染在子进程中。它们的 AX 桥接只有在**应用本身**有辅助功能权限且以 `--force-renderer-accessibility` 参数启动时才会激活。
 
-`molyd --setup` 第 3 步会自动处理。授权后：
+`molyd --setup` 第 3、4 步会自动处理。配置后：
 
-- ⌘Q 完全退出 Chrome，重新打开（AX 桥接只在启动时激活）
-- 验证：`AXManualAccessibility` 标志位会自动通过 `defaults write` 设置
+- ⌘Q 退出每个应用后带参数重启：`open -a "应用名" --args --force-renderer-accessibility`
+- 验证：`curl -s http://127.0.0.1:19876/axdiag` → `ax_trusted: true`
 
 ## 工具列表
 
@@ -144,6 +152,8 @@ Chrome 的网页内容需要额外授权辅助功能（Chrome 把网页渲染在
 | `get_appshot_image` | 获取截图图像（~70K tokens）| "分析这个布局" |
 | `search_appshots` | 按关键字搜索 | "找到我的 Spotify 截图" |
 | `delete_appshot` | 删除截图 | 清理 |
+
+> 💡 **最快的路径是不经过 API。** 用户粘贴图片时，智能体读 `~/.moly/latest.txt`→ `cat` 本地 JSON 文件。比 MCP 快 100 倍，完全离线可用。
 
 ## 架构
 
@@ -209,7 +219,13 @@ make doctor      # 一键验证
 可以。所有功能完全本地运行，不需要网络。
 
 **为什么 Chrome 需要额外授权？**  
-Chrome 的多进程架构把网页内容 AX 树隔离在 Renderer 子进程中。手动授权 Chrome 辅助功能后，Chrome 才会把网页内容暴露给 AX API。
+Chrome 的多进程架构把网页内容 AX 树隔离在 Renderer 子进程中。手动授权 Chrome 辅助功能后，Chrome 才会把网页内容暴露给 AX API。所有 Electron 桌面应用（VS Code、Discord、Slack 等）同理——`molyd --setup` 自动配置它们。
+
+**支持金融/股票类桌面应用吗（Longbridge Pro 等）？**  
+支持。Electron 类桌面应用会被 `molyd --setup`（第 4 步）自动检测并配置。配置后需带参数启动：`open -a "应用名" --args --force-renderer-accessibility`。非 Electron 的自定义渲染应用可能无法暴露 AX 树。
+
+**智能体如何找到截图数据？**  
+首选路径：`cat ~/.moly/latest.txt` 直接返回最新截图目录——一次本地 `cat`，零 HTTP。备用：`python3 ~/.moly/moly_path.py <图片>` 读取 PNG 元数据。降级：`curl http://127.0.0.1:19876/snapshots?limit=1` 通过 daemon API 查询。
 
 **截图保存在哪里？**  
 `~/snapshots/<日期>/<ID>/`——每张截图包含 `screenshot.png`、`metadata.json` 和 `accessibility_tree.json`。PNG 文件中嵌入了目录路径元数据，智能体可以直接读取本地文件。

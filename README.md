@@ -14,7 +14,7 @@
 - **Screenshot**: High-fidelity Retina 2x PNG via macOS ScreenCaptureKit
 - **Text tree**: Full accessibility tree via macOS Accessibility API — your agent reads every label, button, and paragraph on screen
 - **Instant clipboard**: The PNG is automatically copied to your clipboard for ⌘V paste
-- **Zero API calls**: Pasted PNGs carry embedded metadata pointing to local snapshot files — agents read directly from disk in milliseconds
+- **Fast agent lookup**: Every capture writes `~/.moly/latest.txt` with the snapshot directory path. Agent does `cat ~/.moly/latest.txt` → reads local JSON — zero HTTP round-trips
 
 ### How it works
 
@@ -22,9 +22,9 @@
 2. It listens for the ⌃⌥⌘Space hotkey globally via a CGEvent tap
 3. On capture, it gets the frontmost window's PID, snaps a screenshot (ScreenCaptureKit), and traverses the window's accessibility element tree
 4. Both are saved to `~/snapshots/<date>/<id>/` with a SQLite index
-5. The PNG is embedded with `moly_path` metadata pointing to its snapshot directory, then copied to the clipboard
-6. A Python MCP server (`moly_mcp.py`) exposes 5 tools via stdio JSON-RPC — any MCP-compatible agent can call them
-7. If the user pastes an image, the agent extracts `moly_path` from the PNG and reads local JSON files directly — no API round-trip needed
+5. `~/.moly/latest.txt` is atomically updated with the snapshot directory path — this is the primary agent lookup path (one `cat`, zero API calls)
+6. The PNG is also embedded with `moly_path` metadata as a secondary lookup path, then copied to the clipboard
+7. A Python MCP server (`moly_mcp.py`) exposes 6 tools via stdio JSON-RPC — any MCP-compatible agent can call them as a fallback
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org)
@@ -49,7 +49,7 @@ You press ⌃⌥⌘Space
     │              │
     ▼              ▼
   MCP server    Agent parses
-  (5 tools)    metadata directly
+  (6 tools)    metadata directly
     │              │
     └──────┬───────┘
            ▼
@@ -63,8 +63,10 @@ You press ⌃⌥⌘Space
 - **⌃⌥⌘Space hotkey** — built into the daemon, no Shortcuts.app needed
 - **Dual capture** — Retina PNG screenshot + full AX text tree in one shot
 - **Clipboard auto-copy** — paste directly into any chat window
-- **PNG metadata embedding** — pasted images carry the file path; agents read local files in milliseconds (no API calls)
-- **Unified MCP** — same 5 tools for Hermes, OpenClaw, Claude Desktop, Cursor, and any MCP client
+- **Agent fast path** — `~/.moly/latest.txt` gives agents the snapshot directory in one `cat`; zero API calls
+- **PNG metadata embedding** — secondary lookup: PNG `tEXt` chunk carries `moly_path` for direct-to-disk access (works when the image is not re-encoded)
+- **Electron app support** — `--setup` auto-configures Longbridge Pro, VS Code, Discord, Slack, and other Electron desktop apps
+- **Unified MCP** — same 6 tools for Hermes, OpenClaw, Claude Desktop, Cursor, and any MCP client
 - **Apple-style notification** — white rounded overlay at top-right with custom icon
 - **Screen flash** — instant visual feedback on capture
 - **100% local** — no cloud uploads, no API keys, no network required
@@ -79,13 +81,13 @@ chmod +x install.sh && ./install.sh
 
 # 2. Run the one-time permission setup wizard
 ~/.moly/bin/molyd --setup
-#    → Opens System Settings for each permission, guides you step-by-step
+#    → Auto-configures all permissions — no manual System Settings clicking
 #    → Handles: Accessibility (molyd), Screen Recording (molyd),
-#               Accessibility (Google Chrome)
+#               Accessibility (Google Chrome), Accessibility (Electron apps)
 
-# 3. Restart Chrome (if you use it)
-#    ⌘Q quit Chrome completely, then reopen — Chrome only activates
-#    its AX bridge on startup
+# 3. Restart Chrome / Electron apps (if you use them)
+#    Launch with: open -a "App Name" --args --force-renderer-accessibility
+#    This flag is REQUIRED for Chrome/Electron to expose web content to AX
 
 # 4. Restart daemon (required after granting new permissions)
 killall molyd; sleep 1; ~/.moly/bin/molyd &
@@ -131,14 +133,14 @@ mcp_servers:
 
 See [MCP_SETUP.md](moly-share/MCP_SETUP.md) for all platforms.
 
-### Chrome Users
+### Chrome & Electron App Users
 
-For web page text extraction in Chrome, Accessibility permission must be granted to **Chrome itself** (not just molyd). Chrome renders web content in sub-processes — the AX bridge only activates when Chrome detects an accessibility client. 
+Chrome and Electron apps (VS Code, Discord, Slack, Longbridge Pro, etc.) render web content in sub-processes. Their AX bridge only activates when **the app itself** has Accessibility permission AND is launched with `--force-renderer-accessibility`.
 
-`molyd --setup` handles this automatically (step 3 of the wizard). After granting:
+`molyd --setup` handles this automatically (steps 3 & 4). After setup:
 
-- ⌘Q quit Chrome completely and reopen (required to activate the AX bridge)
-- Verify: the `AXManualAccessibility` flag is set automatically via `defaults write`
+- ⌘Q quit and reopen each app with: `open -a "App Name" --args --force-renderer-accessibility`
+- Verify: `curl -s http://127.0.0.1:19876/axdiag` → `ax_trusted: true`
 
 ## Tools
 
@@ -150,6 +152,8 @@ For web page text extraction in Chrome, Accessibility permission must be granted
 | `get_appshot_image` | Get screenshot image (~70K tokens) | "Analyze this layout visually" |
 | `search_appshots` | Search by keyword | "Find my Spotify screenshots" |
 | `delete_appshot` | Delete a snapshot | Cleanup |
+
+> 💡 **The fastest path is no API call at all.** When a user pastes an image, agents read `~/.moly/latest.txt` → `cat` the local JSON files. This is 100x faster than MCP and works offline.
 
 ## Architecture
 
@@ -215,7 +219,13 @@ make doctor      # verify everything works
 Yes. Everything runs locally. No network required.
 
 **Why does Chrome need extra permission?**  
-Chrome's multi-process architecture isolates the web content AX tree from the main process. Granting Accessibility permission to Chrome itself enables the bridge.
+Chrome's multi-process architecture isolates the web content AX tree from the main process. Granting Accessibility permission to Chrome itself enables the bridge. Same applies to all Electron-based desktop apps (VS Code, Discord, Slack, etc.) — `molyd --setup` auto-configures them.
+
+**Does it work with finance/stock apps (Longbridge Pro, etc.)?**  
+Yes. Electron-based desktop apps are auto-detected and configured by `molyd --setup` (step 4). After configuration, launch the app with `open -a "App Name" --args --force-renderer-accessibility`. Non-Electron custom-rendering apps may not expose AX trees.
+
+**How do agents find the snapshot data?**  
+Primary path: `cat ~/.moly/latest.txt` returns the latest snapshot directory instantly — one local `cat`, zero HTTP. Secondary: `python3 ~/.moly/moly_path.py <image>` reads embedded PNG metadata. Fallback: `curl http://127.0.0.1:19876/snapshots?limit=1` via daemon API.
 
 **Where are snapshots stored?**  
 `~/snapshots/<date>/<id>/` — each snapshot has `screenshot.png`, `metadata.json`, and `accessibility_tree.json`. The PNG file embeds the directory path in its metadata for instant agent access.
