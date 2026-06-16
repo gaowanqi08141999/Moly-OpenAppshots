@@ -88,6 +88,7 @@ struct SnapshotMetadata: Codable {
     let windowBounds: WindowBounds
     let image: ImageInfo
     let accessibility: AccessibilityInfo
+    let web: WebCaptureInfo?
 }
 
 // MARK: - API Response Types
@@ -121,6 +122,19 @@ struct CaptureResult {
     let axTree: AXNode
     let metadata: SnapshotMetadata
     let summary: SnapshotSummary
+    let pageUrl: String?
+    let renderedHtml: String?
+    let stylesJson: String?
+}
+
+// MARK: - Web Capture
+
+struct WebCaptureInfo: Codable {
+    let pageUrl: String?
+    let hasDOM: Bool
+    let domSize: Int?
+    let hasStyles: Bool
+    let stylesSize: Int?
 }
 
 // MARK: - Helpers

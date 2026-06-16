@@ -26,6 +26,9 @@ final class StorageEngine {
         }
 
         try createSchema()
+
+        // Migrate existing databases
+        try? exec("ALTER TABLE snapshots ADD COLUMN page_url TEXT NOT NULL DEFAULT ''")
     }
 
     deinit {
@@ -72,11 +75,22 @@ final class StorageEngine {
         try encoder.encode(result.axTree).write(to: snapDir.appendingPathComponent("accessibility_tree.json"))
         try encoder.encode(meta).write(to: snapDir.appendingPathComponent("metadata.json"))
 
+        // Web capture data (optional — only for browser targets)
+        if let url = result.pageUrl {
+            try? url.write(to: snapDir.appendingPathComponent("page_url.txt"), atomically: true, encoding: .utf8)
+        }
+        if let html = result.renderedHtml {
+            try? html.write(to: snapDir.appendingPathComponent("dom.html"), atomically: true, encoding: .utf8)
+        }
+        if let css = result.stylesJson {
+            try? css.write(to: snapDir.appendingPathComponent("styles.json"), atomically: true, encoding: .utf8)
+        }
+
         // Insert into SQLite
         let sql = """
             INSERT OR REPLACE INTO snapshots
-            (id, timestamp, app_name, bundle_id, window_title, text_length, element_count, dir_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            (id, timestamp, app_name, bundle_id, window_title, text_length, element_count, dir_path, page_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
@@ -92,6 +106,7 @@ final class StorageEngine {
         sqlite3_bind_int64(stmt, 6, Int64(meta.accessibility.textLength))
         sqlite3_bind_int64(stmt, 7, Int64(meta.accessibility.elementCount))
         sqlite3_bind_text(stmt, 8, snapDir.path, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 9, result.pageUrl ?? "", -1, SQLITE_TRANSIENT)
 
         guard sqlite3_step(stmt) == SQLITE_DONE else {
             throw StorageError.sqliteError(String(cString: sqlite3_errmsg(db)))

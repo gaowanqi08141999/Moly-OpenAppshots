@@ -36,6 +36,15 @@ platforms: [macos]
 **Golden path — one command:** `cat ~/.moly/latest.txt`
 Returns the latest snapshot directory path instantly. Then `cat` the JSON files inside.
 
+The snapshot directory may also contain web capture data for browser screenshots:
+- `page_url.txt` — the captured page URL
+- `dom.html` — rendered DOM (when Chrome "Allow JavaScript from Apple Events" is enabled)
+- `styles.json` — CSS rules, palette, fonts, layout (same requirement)
+
+For website replication tasks: use AX tree for structure/text, `styles.json` for exact CSS,
+`dom.html` for section IDs and DOM hierarchy. If `styles.json` is absent, `cat page_url.txt`
+and `curl` the page's CSS directly.
+
 ### Pattern A: User provides a file path
 
 If the user gives a path like `~/snapshots/.../screenshot.png`:

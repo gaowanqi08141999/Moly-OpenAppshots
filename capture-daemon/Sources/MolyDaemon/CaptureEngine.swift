@@ -41,15 +41,28 @@ final class CaptureEngine: @unchecked Sendable {
         let windowInfo = try getFrontmostWindow(pid: pid)
         let windowTitle = windowInfo.title
 
-        // 2. Run both capture pipelines concurrently
+        // 2. Run capture pipelines concurrently: screenshot + AX + web data
         async let pngData = captureScreenshot(windowID: windowInfo.windowID)
         async let axTree = extractAXTree(pid: pid, windowID: windowInfo.windowID)
+        async let webData = WebCapture.capture(pid: pid, bundleID: bundleID)
 
-        let (png, tree) = try await (pngData, axTree)
+        let (png, tree, web) = try await (pngData, axTree, webData)
 
-        // 3. Build metadata
+        // 3. Extract page URL from AX tree as fallback
+        let axUrl = extractPageUrl(tree)
+        let pageUrl = web?.pageUrl ?? axUrl
+
+        // 4. Build metadata
         let snapshotID = buildSnapshotID(appName: appName)
         let now = ISO8601DateFormatter().string(from: Date())
+
+        let webInfo = WebCaptureInfo(
+            pageUrl: pageUrl,
+            hasDOM: web?.renderedHtml != nil,
+            domSize: web?.renderedHtml?.count,
+            hasStyles: web?.stylesJson != nil,
+            stylesSize: web?.stylesJson?.count
+        )
 
         let metadata = SnapshotMetadata(
             id: snapshotID,
@@ -77,7 +90,8 @@ final class CaptureEngine: @unchecked Sendable {
                 path: "",
                 textLength: tree.flattenText().count,
                 elementCount: tree.elementCount
-            )
+            ),
+            web: webInfo
         )
 
         let summary = SnapshotSummary(
@@ -92,7 +106,12 @@ final class CaptureEngine: @unchecked Sendable {
             dirPath: ""
         )
 
-        return CaptureResult(pngData: png, axTree: tree, metadata: metadata, summary: summary)
+        return CaptureResult(
+            pngData: png, axTree: tree, metadata: metadata, summary: summary,
+            pageUrl: pageUrl,
+            renderedHtml: web?.renderedHtml,
+            stylesJson: web?.stylesJson
+        )
     }
 
     // MARK: - ScreenCaptureKit (Visual Layer)
@@ -304,6 +323,25 @@ final class CaptureEngine: @unchecked Sendable {
     private func stringAttribute(_ ref: CFTypeRef?) -> String? {
         guard let ref = ref else { return nil }
         return ref as? String
+    }
+
+    /// Extract the page URL from the AX tree by scanning for an AXTextField containing a web URL.
+    private func extractPageUrl(_ node: AXNode) -> String? {
+        // Check this node
+        if node.role == "AXTextField",
+           let value = node.value,
+           let range = value.range(of: "https?://"),
+           range.lowerBound == value.startIndex || value[value.index(before: range.lowerBound)] != "/" {
+            // Extract just the URL — value may contain extra text before/after
+            if let urlRange = value.range(of: "https?://[^\\s]+", options: .regularExpression) {
+                return String(value[urlRange])
+            }
+        }
+        // Recurse into children
+        for child in node.children {
+            if let url = extractPageUrl(child) { return url }
+        }
+        return nil
     }
 
     /// Resolve human-readable app name from PID when NSRunningApplication fails.
