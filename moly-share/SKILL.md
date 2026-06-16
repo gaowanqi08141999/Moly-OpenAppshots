@@ -36,15 +36,32 @@ platforms: [macos]
 **Golden path — one command:** `cat ~/.moly/latest.txt`
 Returns the latest snapshot directory path instantly. Then `cat` the JSON files inside.
 
-The snapshot directory may also contain web capture data for browser screenshots:
-- `page_url.txt` — the captured page URL
-- `dom.html` — full rendered DOM (when Chrome runs with `--remote-debugging-port=9222`)
-- `styles.json` — CSS rules, palette, fonts, layout stamps (same requirement)
+A Moly snapshot contains these files:
 
-For website replication tasks: use AX tree for structure/text, `styles.json` for exact CSS,
-`dom.html` for section IDs and DOM hierarchy. If `styles.json` is absent, `cat page_url.txt`
-and `curl` the page's CSS directly. The web capture uses Chrome DevTools Protocol (CDP) —
-no manual browser settings needed, just the `--remote-debugging-port` flag.
+| File | Source | Always present? | Content |
+|------|--------|-----------------|---------|
+| `screenshot.png` | ScreenCaptureKit | ✅ Yes | Retina 2x PNG screenshot |
+| `accessibility_tree.json` | macOS AX API | ✅ Yes | Full page text, roles, positions |
+| `metadata.json` | Daemon | ✅ Yes | App name, window title, timestamp, URL |
+| `page_url.txt` | AX tree scan | ✅ Yes (browsers) | Clean page URL |
+
+**These files are ALL you need.** There are no `dom.html` or `styles.json` —
+for CSS/HTML, use `page_url.txt` to curl the source directly.
+
+### Website replication: what to use for what
+
+| Task | Use | How |
+|------|-----|-----|
+| Page text / content | `accessibility_tree.json` | `cat $dir/accessibility_tree.json` |
+| Page structure / hierarchy | `accessibility_tree.json` | AX roles: AXHeading, AXLink, AXGroup |
+| Color palette / design tokens | Agent curls CSS | `curl -L "$(cat $dir/page_url.txt)"` → extract hex/rgb values |
+| Exact CSS rules / animations | Agent curls CSS | Same — parse `@keyframes`, class definitions |
+| Section IDs / DOM nesting | Agent curls HTML | `curl -L "$(cat $dir/page_url.txt)"` → parse DOM |
+| Fonts | Agent curls CSS | Extract `@font-face` and `font-family` declarations |
+
+**Rule of thumb:** Moly provides the WHAT (text, structure, URL). The agent provides the HOW
+(curl for CSS/HTML when design details are needed). Never expect dom.html or styles.json —
+they don't exist. Always fall back to curling the URL from `page_url.txt`.
 
 ### Pattern A: User provides a file path
 
@@ -257,7 +274,7 @@ Default: text-only. Only request image/AX tree when truly needed.
 | Empty capture / timeout | Screen Recording permission missing | `~/.moly/bin/molyd --setup` (step 2). All three permissions handled automatically now. |
 | Hotkey not working | Accessibility permission missing or binary hash changed | `curl http://127.0.0.1:19876/axdiag` → check `ax_trusted`. If false: `~/.moly/bin/molyd --setup` (step 1 auto-grants). |
 | **AX tree empty (text=0)** | DAEMON has no Accessibility permission | Run `~/.moly/bin/molyd --setup`. Confirm with `curl http://127.0.0.1:19876/axdiag`. |
-| **AX tree only has browser chrome (no web text)** | Chrome's Accessibility bridge not activated | 1) Check `molyd --setup` passes all 3 steps. 2) ⌘Q quit Chrome completely, reopen. 3) Chrome's AX bridge only exposes web content when the page uses semantic HTML/ARIA. **Modern SPAs (React/Vue) may not expose their dynamic content to macOS AX API at all.** |
-| **Web page content missing even with all permissions OK** | Page is a JS-heavy SPA (B站, YouTube, Twitter, etc.) | **Known limitation:** Chrome/macOS AX API cannot extract dynamically rendered React/Vue component trees. Workarounds: (a) Use Safari instead — Safari has better AX integration, (b) Use the page's public API (B站 API, YouTube API), (c) Use `include_image=true` for visual analysis. **Do NOT retry — this is not a permission issue.** |
+| **AX tree sparse (browser chrome, no web text)** | Chrome launched without `--force-renderer-accessibility` | Tell user: "Run `molyd --setup`, press y to restart Chrome". ONE-TIME fix — after restart all captures are full. |
+| **Need CSS/design for website replication** | Moly captures text + URL, not CSS | `cat $dir/page_url.txt` → `curl -L <url>` to fetch CSS. Then cross-reference with `accessibility_tree.json` for text. See "Website replication" section above. |
 | API returns 404 | Wrong endpoint path | Use `/snapshots`, not `/appshots` or `/list` |
 | `ax_trusted: true` but hotkey still doesn't work | Daemon started BEFORE permissions were granted | Restart daemon: `killall molyd; ~/.moly/bin/molyd &` |

@@ -25,7 +25,7 @@
 5. `~/.moly/latest.txt` 原子更新为最新快照目录路径——这是智能体的首选查找路径（一次 `cat`，零 API 调用）
 6. PNG 同时嵌入 `moly_path` 元数据作为备用查找路径，然后复制到剪贴板
 7. Python MCP 服务器（`moly_mcp.py`）通过 stdio JSON-RPC 暴露 6 个工具——任何 MCP 兼容的智能体都能调用，作为降级备用
-8. 浏览器截图时，daemon 还会连接 Chrome DevTools Protocol（CDP）提取完整 DOM 和 CSS——无需手动开启任何浏览器设置
+8. 浏览器截图时，页面 URL 从地址栏自动提取并写入 `page_url.txt`——智能体自行 curl CSS/HTML
 
 [![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org)
@@ -41,7 +41,6 @@
 ┌──────────────────┐
 │  ScreenCaptureKit │  →  Retina 2x PNG 截图
 │  Accessibility API│  →  结构化文本树 (AX)
-│  Chrome CDP (9222)│  →  DOM + CSS (dom.html, styles.json)
 └────────┬─────────┘
          │
     ┌────┴────┐
@@ -66,7 +65,7 @@
 - **双重捕获** — Retina PNG 截图 + 完整 AX 文本树，一次完成
 - **剪贴板自动复制** — 截图后直接 ⌘V 粘贴到任意对话框
 - **智能体快路径** — `~/.moly/latest.txt` 让智能体一次 `cat` 即获截图路径，零 API 调用
-- **网页捕获层** — 自动提取 `page_url.txt`、`dom.html`（完整 DOM）、`styles.json`（CSS/配色/字体/布局），网站复刻利器
+- **页面 URL 提取** — 浏览器地址栏 URL 自动写入 `page_url.txt`——智能体可按需 curl CSS/HTML
 - **Electron 应用支持** — `--setup` 自动配置 Electron 桌面应用
 - **PNG 元数据嵌入** — 备用查找：PNG `tEXt` 块携带 `moly_path`（图片未被重编码时有效）
 - **统一 MCP** — 一套工具 6 个接口，适配 Hermes、OpenClaw、Claude Desktop、Cursor 及任何 MCP 客户端
@@ -88,12 +87,9 @@ chmod +x install.sh && ./install.sh
 #    → 涵盖：辅助功能 (molyd)、屏幕录制 (molyd)、
 #            辅助功能 (Google Chrome)、辅助功能 (Electron 应用)
 
-# 3. 重启 Chrome（加入 CDP 参数以启用网页捕获）：
-#    open -a "Google Chrome" --args \
-#        --force-renderer-accessibility \
-#        --remote-debugging-port=9222 \
-#        --remote-allow-origins=*
-#    （Electron 应用仅需：open -a "应用名" --args --force-renderer-accessibility）
+# 3. 重启 Chrome（启用 AX 桥接，一次性）：
+#    open -a "Google Chrome" --args --force-renderer-accessibility
+#    （Electron 应用同理）
 
 # 4. 重启 daemon（授权后必须重启）
 killall molyd; sleep 1; ~/.moly/bin/molyd &
@@ -145,16 +141,13 @@ Chrome 和 Electron 应用把网页内容渲染在子进程中，需要正确的
 
 `molyd --setup` 第 3、4 步会自动处理。配置后：
 
-**Chrome**（AX + 网页捕获）：
+**Chrome**：
 ```
-open -a "Google Chrome" --args \
-    --force-renderer-accessibility \
-    --remote-debugging-port=9222 \
-    --remote-allow-origins=*
+open -a "Google Chrome" --args --force-renderer-accessibility
 ```
-CDP 端口使 Moly 能提取 `page_url.txt`、`dom.html`（完整 DOM）和 `styles.json`（CSS/配色/字体/布局）。
+启用 AX 桥接后，网页文本树完整提取。页面 URL 自动写入 `page_url.txt`——智能体可按需 curl CSS/HTML。
 
-**Electron 应用**（仅 AX）：
+**Electron 应用**：
 ```
 open -a "应用名" --args --force-renderer-accessibility
 ```
@@ -244,7 +237,7 @@ Chrome 的多进程架构把网页内容 AX 树隔离在 Renderer 子进程中�
 支持。Electron 类桌面应用会被 `molyd --setup`（第 4 步）自动检测并配置。配置后需带参数启动：`open -a "应用名" --args --force-renderer-accessibility`。非 Electron 的自定义渲染应用可能无法暴露 AX 树。
 
 **能提取 CSS/样式用于网站复刻吗？**  
-能。Chrome 以 `--remote-debugging-port=9222` 参数启动后，Moly 通过 CDP（Chrome DevTools Protocol）自动提取：`page_url.txt`（URL）、`dom.html`（完整 DOM）、`styles.json`（CSS 规则、配色、字体、布局）。智能体获得完整设计层 + AX 文本树，精准复刻网站。无需任何手动浏览器设置。
+Moly 将页面 URL 写入 `page_url.txt`。智能体拿到 URL 后自行 curl 获取 CSS/HTML——这比浏览器自动化更可靠，智能体可自由选择提取内容（配色、字体、动画等）。具体流程见 SKILL.md。
 
 **智能体如何找到截图数据？**  
 首选路径：`cat ~/.moly/latest.txt` 直接返回最新截图目录——一次本地 `cat`，零 HTTP。备用：`python3 ~/.moly/moly_path.py <图片>` 读取 PNG 元数据。降级：`curl http://127.0.0.1:19876/snapshots?limit=1` 通过 daemon API 查询。
