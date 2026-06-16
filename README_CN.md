@@ -1,10 +1,10 @@
 <img src="https://raw.githubusercontent.com/gaowanqi08141999/Moly-OpenAppshots/main/cover.png" style="display:none">
 
-# Moly — 面向 AI 智能体的开源截图工具
+# Moly — 面向Agent的截图信息挖掘工具
 
 [English](README.md) | [中文](README_CN.md)
 
-> *一只聪明的小猫，看见你的屏幕，告诉 AI 一切。*
+> *嘿，人！快把你的屏幕给我看一眼🐱*
 
 **Moly** 一键捕获 macOS 屏幕——截图 + 可访问性文本树——通过标准 MCP 协议喂给任何 AI 智能体。
 
@@ -34,7 +34,7 @@
 ## 工作原理
 
 ```
-你按下 ⌃⌥⌘Space
+按下快捷键 ⌃⌥⌘Space
         │
         ▼
 ┌──────────────────┐
@@ -56,7 +56,7 @@
      智能体分析一切
 ```
 
-**一键截图。PNG 入剪贴板。文本树落盘。智能体两者皆读。**
+**快捷键唤起截图工具，自动获取页面相关的全量AXTree文本树信息**
 
 ## 特性
 
@@ -65,7 +65,7 @@
 - **剪贴板自动复制** — 截图后直接 ⌘V 粘贴到任意对话框
 - **智能体快路径** — `~/.moly/latest.txt` 让智能体一次 `cat` 即获截图路径，零 API 调用
 - **PNG 元数据嵌入** — 备用查找：PNG `tEXt` 块携带 `moly_path` 实现直达磁盘读取（图片未被重编码时有效）
-- **Electron 应用支持** — `--setup` 自动配置 Longbridge Pro、VS Code、Discord、Slack 等 Electron 桌面应用
+- **Electron 应用支持** — `--setup` 自动配置Electron 桌面应用
 - **统一 MCP** — 一套工具 6 个接口，适配 Hermes、OpenClaw、Claude Desktop、Cursor 及任何 MCP 客户端
 - **Apple 风格通知** — 右上角白色圆角弹窗，带自定义图标
 - **屏幕闪白** — 截图瞬间的视觉反馈
