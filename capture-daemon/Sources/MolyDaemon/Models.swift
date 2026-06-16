@@ -135,6 +135,7 @@ struct WebCaptureInfo: Codable {
     let domSize: Int?
     let hasStyles: Bool
     let stylesSize: Int?
+    let flagsMissing: Bool
 }
 
 // MARK: - Helpers

@@ -127,6 +127,9 @@ final class IPCServer {
         case ("POST", "capture"):
             return handleCapture(query: query)
 
+        case ("POST", "restart"):
+            return handleRestartApp(query: query)
+
         case ("GET", "snapshots"):
             if components.count == 1 {
                 return handleList(query: query)
@@ -202,6 +205,71 @@ final class IPCServer {
             print("[IPCServer] list error: \(error)")
         }
         return (500, "application/json", #"{"error":"query failed"}"#)
+    }
+
+    /// POST /restart?app=Name — kill an Electron/Chromium app and relaunch with AX flag.
+    /// Agent calls this when flagsMissing=true in metadata.
+    private func handleRestartApp(query: [String: String]) -> (Int, String, String) {
+        guard let appName = query["app"], !appName.isEmpty else {
+            return (400, "application/json", #"{"error":"?app=Name required"}"#)
+        }
+
+        print("[IPCServer] Restart requested for: \(appName)")
+
+        // Find the app in /Applications
+        let fm = FileManager.default
+        var appPath: String?
+
+        // Direct lookup
+        let directPath = "/Applications/\(appName).app"
+        if fm.fileExists(atPath: directPath) { appPath = directPath }
+
+        // Fuzzy search
+        if appPath == nil, let apps = try? fm.contentsOfDirectory(atPath: "/Applications") {
+            for item in apps where item.hasSuffix(".app") {
+                if item.lowercased().contains(appName.lowercased()) {
+                    appPath = "/Applications/\(item)"
+                    break
+                }
+            }
+        }
+
+        guard let foundPath = appPath else {
+            return (404, "application/json", #"{"error":"app not found: \#(appName)"}"#)
+        }
+
+        // Kill the app
+        let kill = Process()
+        kill.launchPath = "/usr/bin/killall"
+        kill.arguments = ["-9", (foundPath as NSString).lastPathComponent.replacingOccurrences(of: ".app", with: "")]
+        kill.standardOutput = FileHandle.nullDevice
+        kill.standardError = FileHandle.nullDevice
+        try? kill.run()
+        kill.waitUntilExit()
+
+        // Wait for cleanup
+        Thread.sleep(forTimeInterval: 3.0)
+
+        // Check if it's an Electron app (needs the flag)
+        let isElectron = fm.fileExists(atPath: "\(foundPath)/Contents/Frameworks/Electron Framework.framework")
+        let args = isElectron ? ["--args", "--force-renderer-accessibility"] : ["--args"]
+
+        // Relaunch
+        let launch = Process()
+        launch.launchPath = "/usr/bin/open"
+        launch.arguments = ["-a", (foundPath as NSString).lastPathComponent] + args
+        try? launch.run()
+        launch.waitUntilExit()
+
+        let msg = isElectron
+            ? "restarted with --force-renderer-accessibility"
+            : "restarted (not an Electron app, no flag needed)"
+        print("[IPCServer] \(msg)")
+
+        let body = """
+        {"restarted":true,"app":"\(appName)","hint":"App restarted. Screenshot this window and send it again for full AX tree."}
+        """
+        return (200, "application/json", body)
     }
 
     private func handleGetSnapshot(id: String) -> (Int, String, String) {

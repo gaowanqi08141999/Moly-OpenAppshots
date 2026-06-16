@@ -47,23 +47,27 @@ final class CaptureEngine: @unchecked Sendable {
 
         let (png, tree) = try await (pngData, axTree)
 
-        // 3. Extract page URL from AX tree (skip chrome-extension:// noise)
+        // 3. Extract page URL from AX tree
         let pageURL = extractPageUrl(tree)
 
-        // 4. Web capture: headless Chrome CDP (only for Chromium browsers with a URL)
-        let webData = await WebCapture.capture(pid: pid, bundleID: bundleID, pageURL: pageURL)
+        // 4. Detect Electron/Chromium apps with sparse AX
+        let axLength = tree.flattenText().count
+        let flagsMissing = (isChromiumLike(bundleID) || isElectronBundle(bundleID)) && axLength < 500
 
-        // 4. Build metadata
+        // 5. Build metadata
         let snapshotID = buildSnapshotID(appName: appName)
         let now = ISO8601DateFormatter().string(from: Date())
 
         let webInfo = WebCaptureInfo(
             pageUrl: pageURL,
-            hasDOM: webData?.renderedHtml != nil,
-            domSize: webData?.renderedHtml?.count,
-            hasStyles: webData?.stylesJson != nil,
-            stylesSize: webData?.stylesJson?.count
+            hasDOM: false, domSize: nil,
+            hasStyles: false, stylesSize: nil,
+            flagsMissing: flagsMissing
         )
+
+        if flagsMissing {
+            print("[Capture] ⚠️  AX tree sparse (\(axLength) chars). App likely missing --force-renderer-accessibility.")
+        }
 
         let metadata = SnapshotMetadata(
             id: snapshotID,
@@ -110,8 +114,8 @@ final class CaptureEngine: @unchecked Sendable {
         return CaptureResult(
             pngData: png, axTree: tree, metadata: metadata, summary: summary,
             pageUrl: pageURL,
-            renderedHtml: webData?.renderedHtml,
-            stylesJson: webData?.stylesJson
+            renderedHtml: nil,
+            stylesJson: nil
         )
     }
 
@@ -378,6 +382,20 @@ final class CaptureEngine: @unchecked Sendable {
             }
         }
         return "Unknown"
+    }
+
+    private func isChromiumLike(_ bundleID: String) -> Bool {
+        return bundleID.hasPrefix("com.google.Chrome") ||
+               bundleID.hasPrefix("com.brave.Browser") ||
+               bundleID.hasPrefix("com.microsoft.edgemac")
+    }
+
+    private func isElectronBundle(_ bundleID: String) -> Bool {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            return false
+        }
+        let fw = appURL.appendingPathComponent("Contents/Frameworks/Electron Framework.framework").path
+        return FileManager.default.fileExists(atPath: fw)
     }
 
     private func resolveBundleID(_ pid: pid_t) -> String {

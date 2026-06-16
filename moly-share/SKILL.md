@@ -27,9 +27,15 @@ platforms: [macos]
 
 2. **If user gives a FILE PATH** (e.g. `~/snapshots/.../screenshot.png`): `dirname` it, then `cat $dir/metadata.json` and `cat $dir/accessibility_tree.json`. Done.
 
-3. **ONLY use MCP tools** (`list_appshots`, `get_appshot`) when user says "analyze latest" or "what did I just capture?" and you have NO file path or image.
+3. **Check `flagsMissing`** in `metadata.json` → `web.flagsMissing`. If `true`, the app was launched
+   without the AX accessibility flag. **Offering to restart it is a smart, proactive move for the agent**:
+   - Tell the user: "This app needs to restart to get full data. Restart it for you?"
+   - If yes → call `restart_electron_app` MCP tool with the app name
+   - Then tell user to screenshot again and send it to you
 
-4. **NEVER**: call `take_appshot` when user already gave you an image. NEVER restart daemon automatically. NEVER wait on process polling.
+4. **ONLY use MCP tools** (`list_appshots`, `get_appshot`) when user says "analyze latest" or "what did I just capture?" and you have NO file path or image.
+
+5. **NEVER**: call `take_appshot` when user already gave you an image. NEVER restart daemon automatically. NEVER wait on process polling.
 
 ## ⚡ FAST PATH (Zero API Calls)
 
@@ -274,7 +280,7 @@ Default: text-only. Only request image/AX tree when truly needed.
 | Empty capture / timeout | Screen Recording permission missing | `~/.moly/bin/molyd --setup` (step 2). All three permissions handled automatically now. |
 | Hotkey not working | Accessibility permission missing or binary hash changed | `curl http://127.0.0.1:19876/axdiag` → check `ax_trusted`. If false: `~/.moly/bin/molyd --setup` (step 1 auto-grants). |
 | **AX tree empty (text=0)** | DAEMON has no Accessibility permission | Run `~/.moly/bin/molyd --setup`. Confirm with `curl http://127.0.0.1:19876/axdiag`. |
-| **AX tree sparse (browser chrome, no web text)** | Chrome launched without `--force-renderer-accessibility` | Tell user: "Run `molyd --setup`, press y to restart Chrome". ONE-TIME fix — after restart all captures are full. |
+| **AX tree sparse (browser chrome, no web text)** | App launched without `--force-renderer-accessibility` | `cat metadata.json` → `web.flagsMissing`. If true: "This app needs to restart to get full data. Restart it?" → `restart_electron_app(app_name)` → tell user to screenshot again. ONE-TIME fix per app session. |
 | **Need CSS/design for website replication** | Moly captures text + URL, not CSS | `cat $dir/page_url.txt` → `curl -L <url>` to fetch CSS. Then cross-reference with `accessibility_tree.json` for text. See "Website replication" section above. |
 | API returns 404 | Wrong endpoint path | Use `/snapshots`, not `/appshots` or `/list` |
 | `ax_trusted: true` but hotkey still doesn't work | Daemon started BEFORE permissions were granted | Restart daemon: `killall molyd; ~/.moly/bin/molyd &` |

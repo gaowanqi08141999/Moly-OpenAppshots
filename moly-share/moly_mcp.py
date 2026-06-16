@@ -135,6 +135,19 @@ def delete_appshot(args: dict) -> str:
     return json.dumps(result, ensure_ascii=False, indent=2)
 
 
+def restart_electron_app(args: dict) -> str:
+    """Restart an Electron desktop app with --force-renderer-accessibility flag.
+    Call this when an app's AX tree is sparse (flagsMissing=true in metadata).
+    After restarting, tell the user to screenshot the app window again."""
+    app_name = args.get("app_name", "")
+    if not app_name:
+        return json.dumps({"error": "app_name required"}, ensure_ascii=False)
+
+    params = f"app={urllib.parse.quote(app_name)}"
+    result = _daemon_request("POST", f"/restart?{params}")
+    return json.dumps(result, ensure_ascii=False, indent=2)
+
+
 # ── MCP Tool definitions ──
 
 TOOLS = [
@@ -220,6 +233,27 @@ TOOLS = [
         },
     },
     {
+        "name": "restart_electron_app",
+        "description": (
+            "Restart a desktop Electron/Chromium app with the AX accessibility flag.\n\n"
+            "USE THIS when metadata.json shows flagsMissing=true OR the AX tree is\n"
+            "sparse (< 500 chars) for a browser or Electron desktop app.\n"
+            "This kills the app and relaunches it with --force-renderer-accessibility,\n"
+            "which enables full AX tree extraction. After calling this, tell the user\n"
+            "to screenshot the app window again and send it to you."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "app_name": {
+                    "type": "string",
+                    "description": "App name as it appears in /Applications, e.g. 'Longbridge Pro', 'Google Chrome'"
+                },
+            },
+            "required": ["app_name"],
+        },
+    },
+    {
         "name": "delete_appshot",
         "description": "Delete a snapshot and all associated files. Irreversible.",
         "inputSchema": {
@@ -237,6 +271,7 @@ TOOL_MAP = {
     "list_appshots": list_appshots,
     "get_appshot": get_appshot,
     "search_appshots": search_appshots,
+    "restart_electron_app": restart_electron_app,
     "delete_appshot": delete_appshot,
 }
 
