@@ -1,24 +1,23 @@
 <img src="https://raw.githubusercontent.com/gaowanqi08141999/Moly-OpenAppshots/main/cover.png" style="display:none">
 
-# Moly — 面向 AI 智能体的开源截图工具
+# Moly — 面向 AI 智能体的截图信息挖掘工具
 
 [English](README.md) | [中文](README_CN.md)
 
-> *一只聪明的小猫，看见你的屏幕，告诉 AI 一切。*
+> *嘿，人！把你的屏幕给我看看🐱*
 
-**Moly** 一键捕获 macOS 屏幕——截图 + 可访问性文本树——通过标准 MCP 协议喂给任何 AI 智能体。
+**Moly** 一键捕获 macOS 屏幕截图 + 可访问性文本树（AXTree）—— 通过标准 MCP 投喂给任意 Agent。
 
 ### Moly 做什么
 
-- **一键截图（⌃⌥⌘Space）**：同时捕获前台窗口的两层信息
+- **一键截图（⌃⌥⌘Space）**：同时捕获前台窗口的全量信息
 - **视觉层**：Retina 2x PNG 高清截图，通过 macOS ScreenCaptureKit 获取
-- **文本层**：完整的可访问性元素树——智能体可以读取屏幕上的每一个标签、按钮和段落
+- **文本层**：完整的可访问性元素树 —— 智能体可以读取屏幕上的每一个标签、按钮和段落，获取截图相关的全面信息
 - **剪贴板自动复制**：截图自动入剪贴板，⌘V 直接粘贴
-- **零 API 调用**：粘贴的 PNG 携带嵌入式元数据指向本地文件路径，智能体直接读磁盘，毫秒级完成
 
 ### 实现原理
 
-1. 一个轻量级 Swift daemon（`~/.moly/bin/molyd`）在本地 19876 端口运行
+1. 轻量级 Swift daemon（`~/.moly/bin/molyd`）在本地 19876 端口运行
 2. 通过 CGEvent tap 全局监听 ⌃⌥⌘Space 快捷键
 3. 截图时获取前台窗口 PID，ScreenCaptureKit 截图，同时遍历窗口的可访问性元素树
 4. 两者保存到 `~/snapshots/<日期>/<ID>/`，由 SQLite 索引
@@ -26,15 +25,10 @@
 6. Python MCP 服务器（`moly_mcp.py`）通过 stdio JSON-RPC 暴露 5 个工具——任何 MCP 兼容的智能体都能调用
 7. 如果用户粘贴图片，智能体从 PNG 中提取 `moly_path`，直接读取本地 JSON 文件——无需 API 调用
 
-[![macOS](https://img.shields.io/badge/macOS-14.0%2B-blue)](https://www.apple.com/macos/)
-[![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-compatible-purple)](https://modelcontextprotocol.io/)
-
 ## 工作原理
 
 ```
-你按下 ⌃⌥⌘Space
+按下快捷键 ⌃⌥⌘Space
         │
         ▼
 ┌──────────────────┐
@@ -45,7 +39,7 @@
     ┌────┴────┐
     │         │
     ▼         ▼
- ~/snapshots/   剪贴板（PNG 含嵌入式元数据）
+ ~/snapshots/   剪贴板附截图
     │              │
     ▼              ▼
   MCP 服务器    智能体解析
@@ -60,7 +54,7 @@
 
 ## 特性
 
-- **⌃⌥⌘Space 快捷键** — daemon 内置，无需 Shortcuts.app
+- **⌃⌥⌘Space 快捷键** — daemon 内置，安装本项目后直接按快捷键唤起
 - **双重捕获** — Retina PNG 截图 + 完整 AX 文本树，一次完成
 - **剪贴板自动复制** — 截图后直接 ⌘V 粘贴到任意对话框
 - **PNG 元数据嵌入** — 粘贴的图片携带本地文件路径，智能体直接读取本地 JSON，0 次 API 调用
