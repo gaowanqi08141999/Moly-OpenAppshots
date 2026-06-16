@@ -41,27 +41,28 @@ final class CaptureEngine: @unchecked Sendable {
         let windowInfo = try getFrontmostWindow(pid: pid)
         let windowTitle = windowInfo.title
 
-        // 2. Run capture pipelines concurrently: screenshot + AX + web data
+        // 2. Run capture pipelines concurrently: screenshot + AX
         async let pngData = captureScreenshot(windowID: windowInfo.windowID)
         async let axTree = extractAXTree(pid: pid, windowID: windowInfo.windowID)
-        async let webData = WebCapture.capture(pid: pid, bundleID: bundleID)
 
-        let (png, tree, web) = try await (pngData, axTree, webData)
+        let (png, tree) = try await (pngData, axTree)
 
-        // 3. Extract page URL from AX tree as fallback
-        let axUrl = extractPageUrl(tree)
-        let pageUrl = web?.pageUrl ?? axUrl
+        // 3. Extract page URL from AX tree (skip chrome-extension:// noise)
+        let pageURL = extractPageUrl(tree)
+
+        // 4. Web capture: headless Chrome CDP (only for Chromium browsers with a URL)
+        let webData = await WebCapture.capture(pid: pid, bundleID: bundleID, pageURL: pageURL)
 
         // 4. Build metadata
         let snapshotID = buildSnapshotID(appName: appName)
         let now = ISO8601DateFormatter().string(from: Date())
 
         let webInfo = WebCaptureInfo(
-            pageUrl: pageUrl,
-            hasDOM: web?.renderedHtml != nil,
-            domSize: web?.renderedHtml?.count,
-            hasStyles: web?.stylesJson != nil,
-            stylesSize: web?.stylesJson?.count
+            pageUrl: pageURL,
+            hasDOM: webData?.renderedHtml != nil,
+            domSize: webData?.renderedHtml?.count,
+            hasStyles: webData?.stylesJson != nil,
+            stylesSize: webData?.stylesJson?.count
         )
 
         let metadata = SnapshotMetadata(
@@ -108,9 +109,9 @@ final class CaptureEngine: @unchecked Sendable {
 
         return CaptureResult(
             pngData: png, axTree: tree, metadata: metadata, summary: summary,
-            pageUrl: pageUrl,
-            renderedHtml: web?.renderedHtml,
-            stylesJson: web?.stylesJson
+            pageUrl: pageURL,
+            renderedHtml: webData?.renderedHtml,
+            stylesJson: webData?.stylesJson
         )
     }
 
@@ -325,19 +326,25 @@ final class CaptureEngine: @unchecked Sendable {
         return ref as? String
     }
 
-    /// Extract the page URL from the AX tree by scanning for an AXTextField containing a web URL.
+    /// Extract the page URL from the AX tree by scanning for an AXTextField containing a web address.
+    /// Handles both "https://github.com/foo" and bare "github.com" values from Chrome's address bar.
     private func extractPageUrl(_ node: AXNode) -> String? {
-        // Check this node
-        if node.role == "AXTextField",
-           let value = node.value,
-           let range = value.range(of: "https?://"),
-           range.lowerBound == value.startIndex || value[value.index(before: range.lowerBound)] != "/" {
-            // Extract just the URL — value may contain extra text before/after
+        if node.role == "AXTextField", let value = node.value {
+            // Try full URL first (https://...)
             if let urlRange = value.range(of: "https?://[^\\s]+", options: .regularExpression) {
-                return String(value[urlRange])
+                let url = String(value[urlRange])
+                if !url.hasPrefix("chrome-extension://") && !url.hasPrefix("chrome://") {
+                    return url
+                }
+            }
+            // Try bare domain (e.g. "github.com" in Chrome address bar)
+            if let bareRange = value.range(of: "[a-zA-Z0-9][-a-zA-Z0-9]*\\.[a-zA-Z]{2,}[^\\s]*", options: .regularExpression) {
+                let bare = String(value[bareRange])
+                if bare.contains(".") && !bare.hasPrefix("/") {
+                    return "https://\(bare)"
+                }
             }
         }
-        // Recurse into children
         for child in node.children {
             if let url = extractPageUrl(child) { return url }
         }
