@@ -385,11 +385,12 @@ final class SetupHelper {
             let needsCDP = !chromeHasDebuggingPort()
             if needsRestart || needsCDP {
                 var flags = "--force-renderer-accessibility"
-                if needsCDP { flags += " --remote-debugging-port=9222" }
+                if needsCDP { flags += " --remote-debugging-port=9222 --remote-allow-origins=*" }
                 print("│  \(cross) Chrome missing required flag(s):")
                 if needsRestart { print("│          --force-renderer-accessibility") }
                 if needsCDP { print("│          --remote-debugging-port=9222 (web capture)") }
-                print("│  \(arrow) Restart with: open -a \"Google Chrome\" --args \(flags)")
+                print("│  \(arrow) Kill and restart Chrome: killall \"Google Chrome\"; sleep 2")
+                print("│         open -a \"Google Chrome\" --args \(flags)")
             }
             print("│  ⚠️  If you haven't ⌘Q quit + reopened Chrome yet, do it now!")
             print("└──────────────────────────────────────────────────────────────")

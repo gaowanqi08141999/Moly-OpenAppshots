@@ -113,7 +113,11 @@ enum WebCapture {
 
     private static func connectWebSocket(_ wsURLString: String) -> URLSessionWebSocketTask? {
         guard let url = URL(string: wsURLString) else { return nil }
-        let task = URLSession.shared.webSocketTask(with: url)
+        var req = URLRequest(url: url)
+        // Chrome 149+ requires an Origin header matching --remote-allow-origins
+        req.setValue("http://127.0.0.1:\(cdpPort)", forHTTPHeaderField: "Origin")
+        req.timeoutInterval = timeout
+        let task = URLSession.shared.webSocketTask(with: req)
         task.resume()
         return task
     }
